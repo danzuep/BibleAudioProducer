@@ -48,7 +48,7 @@ import io.github.danzuep.bibleaudioproducer.audio.VerseAudio
 import io.github.danzuep.bibleaudioproducer.audio.VerseExportFormat
 import io.github.danzuep.bibleaudioproducer.data.RecordingPlanJson
 import io.github.danzuep.bibleaudioproducer.data.AudioProjectRepository
-import io.github.danzuep.bibleaudioproducer.data.MaculaVerseJson
+import io.github.danzuep.bibleaudioproducer.workbench.MaculaXml
 import io.github.danzuep.bibleaudioproducer.workbench.RecordingCard
 import io.github.danzuep.bibleaudioproducer.workbench.AudioVerse
 import io.github.danzuep.bibleaudioproducer.workbench.AudioProjectState
@@ -641,7 +641,7 @@ class WorkbenchActivity : AppCompatActivity() {
     }
 
     private fun versesFor(book: String): List<AudioVerse> = verseCache.getOrPut(book) {
-        assets.open("books/$book.json").bufferedReader().use { MaculaVerseJson.parse(it.readText()) }
+        assets.open("books/$book.xml").bufferedReader().use { MaculaXml.parse(it.readText()) }
     }
 
     private fun showChapters() {

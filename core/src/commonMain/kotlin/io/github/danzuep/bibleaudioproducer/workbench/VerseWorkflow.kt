@@ -12,7 +12,9 @@ data class VerseWord(
     val mandarin: String = "",
     val morphology: String = "",
     val reference: String = "",
-    val syntaxPath: String = ""
+    val id: String = "",
+    val head: Boolean = false,
+    val sourceGloss: String = ""
 ) {
     val proper: Boolean get() = type == "proper" || pos == "proper_noun"
     val unspokenKey: String get() = surface.ifEmpty { lemma }
@@ -32,7 +34,7 @@ data class VerseWord(
     }
 }
 
-data class AudioVerse(val reference: String, val words: List<VerseWord>) {
+data class AudioVerse(val reference: String, val words: List<VerseWord>, val syntax: SyntaxGroup? = null) {
     val chapter: Int get() = reference.substringAfter(' ').substringBefore(':').toInt()
 }
 
@@ -71,7 +73,7 @@ object VerseWorkflow {
 
     fun effectiveWordOrder(verse: AudioVerse, state: AudioProjectState): List<Int>? =
         state.wordOrders[verse.reference] ?: if (verse.reference in state.seedOrders) null
-        else defaultMode(state.defaultWordOrder)?.let { modeOrder(verse.words, it) }
+        else defaultMode(state.defaultWordOrder)?.let { modeOrder(verse, it) }
 
     private val nominal = setOf("noun", "pron", "det", "adj", "num")
     private val heads = setOf("noun", "pron", "num")
@@ -233,176 +235,11 @@ object VerseWorkflow {
         return order(chunks, rules, chunkOrder).flatMap { chunkWordIndices[it] }
     }
 
-    fun modeOrder(words: List<VerseWord>, mode: WordOrderMode): List<Int> {
-        val original = words.indices.toList()
-        val slots = mode.slots ?: return original
-        if (words.any { it.syntaxPath.isBlank() }) return original
+    fun modeOrder(verse: AudioVerse, mode: WordOrderMode): List<Int> =
+        verse.syntax?.let { MaculaWordOrder.order(verse.words, it, mode) } ?: verse.words.indices.toList()
 
-        data class Node(
-            val id: String, val category: String, val role: String, val rule: String,
-            val children: MutableList<Node> = mutableListOf(), var word: Int? = null
-        )
-        val root = Node("", "", "", "")
-        val nodes = mutableMapOf<String, Node>()
-        for ((index, word) in words.withIndex()) {
-            var parent = root
-            for (part in word.syntaxPath.split('/')) {
-                val fields = part.split(',')
-                if (fields.size != 4 || fields[0].isBlank()) return original
-                val node = nodes[fields[0]]
-                if (node == null) {
-                    val created = Node(fields[0], fields[1], fields[2], fields[3])
-                    parent.children.add(created)
-                    nodes[fields[0]] = created
-                    parent = created
-                } else {
-                    if (node !in parent.children || node.category != fields[1] ||
-                        node.role != fields[2] || node.rule != fields[3]) return original
-                    parent = node
-                }
-            }
-            parent.children.add(Node("", "", word.role, "", word = index))
-        }
-
-        val result = original.toMutableList()
-        fun members(node: Node): List<Int> = node.word?.let(::listOf)
-            ?: node.children.flatMap(::members).sorted()
-        fun positions(indices: List<Int>) = indices.map { result.indexOf(it) }.sorted()
-        fun contiguous(indices: List<Int>): Boolean {
-            val positions = positions(indices)
-            return positions.isNotEmpty() && positions.last() - positions.first() + 1 == positions.size
-        }
-        fun replace(indices: List<Int>, ordered: List<Int>) {
-            val positions = result.indices.filter { result[it] in indices }
-            positions.zip(ordered).forEach { (position, index) -> result[position] = index }
-        }
-        fun visit(node: Node, inNominal: Boolean, subordinate: Boolean, incomplete: Boolean) {
-            val nominal = inNominal || node.category.removePrefix("!") == "np"
-            val sub = subordinate || node.rule.equals("sub-CL", ignoreCase = true)
-            val partial = incomplete || node.category.startsWith("!")
-            // MACULA can place a postpositive conjunction before its clause in the
-            // tree even though it interrupts the clause's first adverb in the text.
-            if (node.category == "cl" && !nominal && !(mode.verbSecond && sub) && node.children.size == 2) {
-                val conjunction = node.children.singleOrNull { it.word?.let { i -> words[i].pos == "conj" } == true }
-                val clause = node.children.singleOrNull { it.category == "cl" }
-                if (conjunction != null && clause != null) {
-                    val conj = conjunction.word!!
-                    val clauseWords = members(clause)
-                    val all = (clauseWords + conj).sorted()
-                    if (clauseWords.size > 1 && contiguous(all) && conj == clauseWords.first() + 1 &&
-                        words[clauseWords.first()].role == "adv" && words[clauseWords.first()].pos == "adv"
-                    ) {
-                        replace(all, listOf(conj) + result.filter { it in clauseWords })
-                    }
-                }
-            }
-            node.children.forEach { visit(it, nominal, sub, partial) }
-            val all = members(node)
-            if (mode == WordOrderMode.ENGLISH_SVO && !partial && node.category == "np" &&
-                node.rule.equals("NpAdjp", ignoreCase = true) && node.children.size == 2 && contiguous(all)
-            ) {
-                val noun = node.children[0]
-                val adjective = node.children[1]
-                val nounWords = members(noun)
-                val adjectiveWords = members(adjective)
-                val simpleNoun = noun.word?.let { words[it].pos == "noun" } == true ||
-                    (noun.category == "np" && noun.rule.equals("DetNP", ignoreCase = true) &&
-                        noun.children.size == 2 && noun.children.all { it.word != null } &&
-                        noun.children.map { words[it.word!!].pos } == listOf("det", "noun"))
-                val simpleAdjective = adjective.word?.let { words[it].pos == "adj" } == true ||
-                    (adjective.category == "adjp" && adjectiveWords.size == 1 &&
-                        adjective.children.singleOrNull()?.word?.let { words[it].pos == "adj" } == true)
-                if (simpleNoun && simpleAdjective && contiguous(nounWords) && contiguous(adjectiveWords) &&
-                    positions(nounWords).last() + 1 == positions(adjectiveWords).first()
-                ) {
-                    val determiner = nounWords.takeWhile { words[it].pos == "det" }
-                    replace(all, determiner + adjectiveWords + nounWords.drop(determiner.size))
-                }
-            }
-            if (mode == WordOrderMode.ENGLISH_SVO && !partial && node.category == "np" &&
-                node.rule.equals("NPDetAdj", ignoreCase = true) && node.children.size == 2 && contiguous(all)
-            ) {
-                val noun = node.children[0]
-                val modifier = node.children[1]
-                val nounIndex = noun.word
-                val modifierWords = members(modifier)
-                if (nounIndex != null && words[nounIndex].pos == "noun" &&
-                    modifier.category == "np" && modifier.rule.equals("DetAdj", ignoreCase = true) &&
-                    modifier.children.size == 2 && modifier.children.all { it.word != null } &&
-                    modifier.children.map { words[it.word!!].pos } == listOf("det", "adj") &&
-                    contiguous(modifierWords) &&
-                    positions(listOf(nounIndex)).last() + 1 == positions(modifierWords).first()
-                ) {
-                    replace(all, result.filter { it in modifierWords } + nounIndex)
-                }
-            }
-            if (mode.postpositions && node.category == "pp" && contiguous(all) &&
-                words[all.first()].pos == "prep" && all.size > 1
-            ) {
-                val current = result.filter { it in all }
-                replace(all, current.filter { it != all.first() } + all.first())
-            }
-            if (node.category != "cl" || nominal || (mode.verbSecond && sub)) return
-
-            data class Constituent(val role: String, val indices: List<Int>, val category: String)
-            val parts = node.children.map { child ->
-                val indices = members(child)
-                val role = when (child.role.lowercase()) {
-                    "s" -> "S"
-                    "v", "vc" -> "V"
-                    "o", "p" -> "O"
-                    "io" -> "IO"
-                    "adv" -> "ADV"
-                    else -> ""
-                }
-                Constituent(
-                    if (child.category == "cl" || child.category.startsWith("!") || !contiguous(indices)) "" else role,
-                    indices, child.category
-                )
-            }.sortedBy { positions(it.indices).firstOrNull() ?: Int.MAX_VALUE }
-
-            fun reorder(segment: List<Constituent>) {
-                if (segment.count { it.role == "V" } != 1 || segment.size < 2) return
-                val merged = mutableListOf<Constituent>()
-                for (part in segment) {
-                    if (!mode.verbSecond && part.role == "V" && merged.lastOrNull()?.role == "ADV") {
-                        val modifier = merged.removeAt(merged.lastIndex)
-                        merged.add(Constituent("V", modifier.indices + part.indices, ""))
-                    } else merged.add(part)
-                }
-                val leading = merged.firstOrNull()?.takeIf {
-                    it.category == "pp" && it.role in setOf("O", "ADV")
-                }
-                val rest = if (leading == null) merged else merged.drop(1)
-                var sorted = rest.sortedBy { slots.indexOf(it.role).let { rank -> if (rank < 0) slots.size else rank } }
-                if (mode.verbSecond) {
-                    val lead = leading ?: sorted.firstOrNull { it.role != "V" }
-                    if (lead != null) {
-                        sorted = listOf(lead) + sorted.filter { it.role == "V" } +
-                            sorted.filter { it !== lead && it.role != "V" }
-                    }
-                } else if (leading != null) {
-                    sorted = listOf(leading) + sorted
-                }
-                val indexes = segment.flatMap { it.indices }
-                val reordered = sorted.flatMap { part -> result.filter { it in part.indices } }
-                replace(indexes, reordered)
-            }
-            val segment = mutableListOf<Constituent>()
-            for (part in parts) {
-                if (part.role.isEmpty() || (segment.isNotEmpty() &&
-                    positions(segment.last().indices).last() + 1 != positions(part.indices).first())
-                ) {
-                    reorder(segment)
-                    segment.clear()
-                }
-                if (part.role.isNotEmpty()) segment.add(part)
-            }
-            reorder(segment)
-        }
-        visit(root, false, false, false)
-        return result
-    }
+    fun reorder(verse: AudioVerse, mode: WordOrderMode): List<VerseWord> =
+        modeOrder(verse, mode).map(verse.words::get)
 
     private fun validOrder(order: List<Int>, count: Int) =
         order.size == count && order.toSet().size == count && order.all { it in 0 until count }

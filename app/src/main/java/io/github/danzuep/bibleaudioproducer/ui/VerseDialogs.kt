@@ -324,7 +324,7 @@ internal class VerseDialogs(
             id = R.id.audio_verse_word_order
             adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, modeLabels)
             val current = selectedMode ?: modes.firstOrNull {
-                it != WordOrderMode.CUSTOM && VerseWorkflow.modeOrder(verse.words, it) == order
+                it != WordOrderMode.CUSTOM && VerseWorkflow.modeOrder(verse, it) == order
             } ?: WordOrderMode.CUSTOM
             selectedMode = current
             setSelection(current.ordinal)
@@ -334,7 +334,7 @@ internal class VerseDialogs(
                     if (selecting || mode == selectedMode) return
                     selectedMode = mode
                     if (mode == WordOrderMode.CUSTOM) return
-                    val next = VerseWorkflow.modeOrder(verse.words, mode)
+                    val next = VerseWorkflow.modeOrder(verse, mode)
                     if (next != order) {
                         order = next.toMutableList()
                         renderWords()

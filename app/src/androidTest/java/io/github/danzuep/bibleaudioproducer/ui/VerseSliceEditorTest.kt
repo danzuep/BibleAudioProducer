@@ -27,7 +27,7 @@ import io.github.danzuep.bibleaudioproducer.audio.VerseAudio
 import io.github.danzuep.bibleaudioproducer.R
 import io.github.danzuep.bibleaudioproducer.audio.VerseBoundaries
 import io.github.danzuep.bibleaudioproducer.data.AudioProjectRepository
-import io.github.danzuep.bibleaudioproducer.data.MaculaVerseJson
+import io.github.danzuep.bibleaudioproducer.workbench.MaculaXml
 import io.github.danzuep.bibleaudioproducer.workbench.VerseRecordingWord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -84,8 +84,8 @@ class VerseSliceEditorTest {
             "pm grant ${context.packageName} ${Manifest.permission.RECORD_AUDIO}"
         )
         ParcelFileDescriptor.AutoCloseInputStream(grant).bufferedReader().use { it.readText() }
-        val words = context.assets.open("books/JHN.json").bufferedReader().use {
-            MaculaVerseJson.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
+        val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
         }.mapIndexed { index, word -> VerseRecordingWord(word, index) }
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             lateinit var editor: VerseTakeEditor
@@ -115,8 +115,8 @@ class VerseSliceEditorTest {
     @Test
     fun droppingWordMovesCardsAndInvalidatesAffectedReviews() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val words = context.assets.open("books/JHN.json").bufferedReader().use {
-            MaculaVerseJson.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
+        val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
         }.mapIndexed { index, word -> VerseRecordingWord(word, index) }
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             lateinit var editor: VerseTakeEditor
@@ -220,8 +220,8 @@ class VerseSliceEditorTest {
     @Test
     fun waveformAndTypedBoundariesStaySharedWhenCardsReorder() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val words = context.assets.open("books/JHN.json").bufferedReader().use {
-            MaculaVerseJson.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
+        val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
         }.mapIndexed { index, word -> VerseRecordingWord(word, index) }
         assertEquals(3, words.size)
         var reordered = emptyList<Int>()
@@ -283,8 +283,8 @@ class VerseSliceEditorTest {
     @Test
     fun cardOrderMatchesAudioAndGuideAfterReordering() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val verseWords = context.assets.open("books/JHN.json").bufferedReader().use {
-            MaculaVerseJson.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
+        val verseWords = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
         }
         val words = verseWords.mapIndexed { index, word ->
             VerseRecordingWord(word.copy(gloss = "english$index", mandarin = if (index == 1) "" else "chinese$index"), index * 2)
@@ -356,8 +356,8 @@ class VerseSliceEditorTest {
     @Test
     fun duplicateSurfacesRequireReplacementAndKeepSeparateTakeSlices() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val word = context.assets.open("books/JHN.json").bufferedReader().use {
-            MaculaVerseJson.parse(it.readText()).first().words.first { !it.disabled(emptySet()) }
+        val word = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.first { !it.disabled(emptySet()) }
         }
         val directory = File(context.cacheDir, "slice-duplicate-test")
         directory.deleteRecursively()
@@ -444,8 +444,8 @@ class VerseSliceEditorTest {
     @Test
     fun chipsHelpAndNudgesKeepSharedBoundariesAndStickyControls() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val words = context.assets.open("books/JHN.json").bufferedReader().use {
-            MaculaVerseJson.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
+        val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
         }.mapIndexed { index, word -> VerseRecordingWord(word, index) }
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->

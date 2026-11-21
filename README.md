@@ -56,20 +56,24 @@ Subsequent verses use it for the editor, recorded playback and export unless the
 already have a saved order; a custom order is specific to its verse.
 
 Word-order presets are starting points, not translations. The bundled Greek data uses
-[MACULA's pinned syntax trees](https://github.com/Clear-Bible/macula-greek/tree/8423afe47b9e8f24b7772e808af45c7159a6fe7e/SBLGNT/lowfat)
-to keep phrases and nested clauses together and distinguish subjects from predicates.
+[MACULA's pinned lowfat XML syntax trees](https://github.com/Clear-Bible/macula-greek/tree/8423afe47b9e8f24b7772e808af45c7159a6fe7e/SBLGNT/lowfat)
+directly to keep coordinated phrases and nested clauses together and distinguish subjects
+from predicates. The bundled recording plan is generated from the same XML words.
+Recording keys now use XML surface forms, so recordings saved under the former
+spellings of seven forms will need to be recorded again.
 For example, the English preset uses the ordering relationships in the
 [Berean Standard Bible, John 1:1 and 3:16](https://github.com/usfm-bible/examples.bsb/blob/50a493b1a6a7828f15833f95920bed81c69fb710/44JHNBSB.usfm)
 as a grammar reference, not as a word-for-word target. Translations add, omit and
 change words, so they cannot generally be obtained by permuting Greek tokens.
 All presets benefit from the same phrase and clause boundaries, but their orders are
-approximations, not full grammars of English, German, Mandarin, Japanese or Arabic.
+approximations, not full grammars of English, German, Mandarin, Japanese, Korean,
+Arabic or Hebrew.
 German subordinate clauses are left in source order rather than forced into V2;
 Japanese postpositions are approximated only for intact prepositional phrases.
-The English preset places a simple postpositive adjective before its noun in an intact
-MACULA noun-adjective phrase, including a noun followed by an article and adjective.
-It preserves both Greek articles if present; omit or adapt them when translating.
-More complex modifiers are left alone.
+English, Mandarin and Japanese move post-head modifiers in explicitly headed noun
+phrases. For the bundled data, which has no explicit head annotations, these modes also
+handle MACULA's noun-adjective and noun-article-adjective rules. Both Greek articles
+are retained if present; omit or adapt them when translating.
 Other noun modifiers, negation, implicit subjects, discourse and idioms require
 human review. Where syntax is missing, malformed, crosses verse boundaries,
 is discontinuous or ambiguous, the

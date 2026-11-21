@@ -92,8 +92,8 @@
     <string name="audio_word_order_english">English (SVO)</string>
     <string name="audio_word_order_german">German (V2)</string>
     <string name="audio_word_order_mandarin">Mandarin (S-Adv-V-O)</string>
-    <string name="audio_word_order_japanese">Japanese (SOV)</string>
-    <string name="audio_word_order_arabic">Arabic (VSO)</string>
+    <string name="audio_word_order_japanese">Japanese / Korean (SOV)</string>
+    <string name="audio_word_order_arabic">Arabic / Hebrew (VSO)</string>
     <string name="audio_word_order_custom">Custom</string>
     <string name="audio_order_saved">Verse order saved.</string>
     <string name="audio_order_failed">Unable to save verse order.</string>

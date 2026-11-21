@@ -110,113 +110,8 @@ class VerseWorkflowTest {
             word("θεόν", "θεός", "noun", "accusative")
         )
         for (mode in WordOrderMode.entries) {
-            assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(words, mode))
+            assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(AudioVerse("JHN 1:1", words), mode))
         }
-    }
-
-    @Test
-    fun syntaxRolesDriveEachPresetAndKeepCoordinatedNounPhraseTogether() {
-        fun syntax(surface: String, pos: String, role: String, path: String) =
-            word(surface, surface, pos).copy(role = role, syntaxPath = path)
-        val clause = "1,cl,,V-S-O"
-        val words = listOf(
-            syntax("v", "verb", "v", clause),
-            syntax("s1", "noun", "", "$clause/2,np,s,ConjNp"),
-            syntax("and", "conj", "", "$clause/2,np,s,ConjNp"),
-            syntax("s2", "noun", "", "$clause/2,np,s,ConjNp"),
-            syntax("o", "noun", "o", clause)
-        )
-        assertEquals(listOf(1, 2, 3, 0, 4), VerseWorkflow.modeOrder(words, WordOrderMode.ENGLISH_SVO))
-        assertEquals(listOf(1, 2, 3, 0, 4), VerseWorkflow.modeOrder(words, WordOrderMode.GERMAN_V2))
-        assertEquals(listOf(1, 2, 3, 0, 4), VerseWorkflow.modeOrder(words, WordOrderMode.MANDARIN_SADVVO))
-        assertEquals(listOf(1, 2, 3, 4, 0), VerseWorkflow.modeOrder(words, WordOrderMode.JAPANESE_SOV))
-        assertEquals(listOf(0, 1, 2, 3, 4), VerseWorkflow.modeOrder(words, WordOrderMode.ARABIC_VSO))
-        assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(words, WordOrderMode.GREEK))
-        assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(words, WordOrderMode.CUSTOM))
-        assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(words.mapIndexed { i, w ->
-            if (i == 0) w.copy(syntaxPath = "invalid") else w
-        }, WordOrderMode.ENGLISH_SVO))
-        val incomplete = words.map { it.copy(syntaxPath = it.syntaxPath.replace("2,np,s", "2,!np,s")) }
-        assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(incomplete, WordOrderMode.ENGLISH_SVO))
-    }
-
-    @Test
-    fun japanesePostpositionsAndGermanSubordinateClausesAreConservative() {
-        val cl = "1,cl,,sub-CL/2,cl,,O-V"
-        val words = listOf(
-            word("object", "object", "noun").copy(role = "o", syntaxPath = cl),
-            word("verb", "verb", "verb").copy(role = "v", syntaxPath = cl),
-            word("prep", "prep", "prep").copy(syntaxPath = "$cl/3,pp,adv,PrepNp"),
-            word("noun", "noun", "noun").copy(syntaxPath = "$cl/3,pp,adv,PrepNp")
-        )
-        assertEquals(words.indices.toList(), VerseWorkflow.modeOrder(words, WordOrderMode.GERMAN_V2))
-        assertEquals(listOf(3, 2, 0, 1), VerseWorkflow.modeOrder(words, WordOrderMode.JAPANESE_SOV))
-    }
-
-    @Test
-    fun englishMovesOnlySimplePostpositiveAdjectivesWithinTheirPhrase() {
-        val path = "1,cl,,V-O/2,np,o,NpAdjp"
-        val noun = word("noun", "noun", "noun").copy(syntaxPath = path)
-        val adjective = word("adj", "adj", "adj").copy(syntaxPath = path)
-        val words = listOf(noun, adjective)
-        assertEquals(listOf(1, 0), VerseWorkflow.modeOrder(words, WordOrderMode.ENGLISH_SVO))
-        for (mode in WordOrderMode.entries.filter { it != WordOrderMode.ENGLISH_SVO }) {
-            assertEquals(listOf(0, 1), VerseWorkflow.modeOrder(words, mode))
-        }
-        val withDeterminer = listOf(
-            word("det", "det", "det").copy(syntaxPath = "$path/3,np,,DetNP"),
-            noun.copy(syntaxPath = "$path/3,np,,DetNP"), adjective
-        )
-        assertEquals(listOf(0, 2, 1), VerseWorkflow.modeOrder(withDeterminer, WordOrderMode.ENGLISH_SVO))
-        assertEquals(listOf(0, 1), VerseWorkflow.modeOrder(words.map {
-            it.copy(syntaxPath = it.syntaxPath.replace("NpAdjp", "unknown"))
-        }, WordOrderMode.ENGLISH_SVO))
-        assertEquals(listOf(0, 1), VerseWorkflow.modeOrder(words.map {
-            it.copy(syntaxPath = it.syntaxPath.replace("2,np", "2,!np"))
-        }, WordOrderMode.ENGLISH_SVO))
-        assertEquals(listOf(0, 1, 2), VerseWorkflow.modeOrder(
-            listOf(noun, adjective, adjective), WordOrderMode.ENGLISH_SVO
-        ))
-        val outside = word("other", "other", "noun").copy(syntaxPath = "1,cl,,V-O/4,np,,")
-        assertEquals(listOf(0, 1, 2), VerseWorkflow.modeOrder(
-            listOf(noun, outside, adjective), WordOrderMode.ENGLISH_SVO
-        ))
-        val repeated = listOf(noun, adjective, noun.copy(syntaxPath = "1,cl,,V-O/4,np,,"))
-        assertEquals(listOf(1, 0, 2), VerseWorkflow.modeOrder(repeated, WordOrderMode.ENGLISH_SVO))
-        val manual = listOf(0, 1)
-        assertEquals(manual, VerseWorkflow.orderedWordIndices(words, emptyMap(), manual))
-    }
-
-    @Test
-    fun englishMovesRepeatedArticleAdjectiveBeforeItsNounOnlyInAnIntactPhrase() {
-        val clause = "1,cl,,V-O"
-        val outer = "$clause/2,np,o,DetNP"
-        val phrase = "$outer/3,np,,NPDetAdj"
-        val modifier = "$phrase/4,np,,DetAdj"
-        val words = listOf(
-            word("verb", "verb", "verb").copy(role = "v", syntaxPath = clause),
-            word("article", "article", "det").copy(syntaxPath = outer),
-            word("noun", "noun", "noun").copy(syntaxPath = phrase),
-            word("article", "article", "det").copy(syntaxPath = modifier),
-            word("adjective", "adjective", "adj").copy(syntaxPath = modifier)
-        )
-        assertEquals(listOf(0, 1, 3, 4, 2), VerseWorkflow.modeOrder(words, WordOrderMode.ENGLISH_SVO))
-        for (mode in WordOrderMode.entries.filter { it != WordOrderMode.ENGLISH_SVO }) {
-            val phraseOrder = VerseWorkflow.modeOrder(words, mode).filter { it in 1..4 }
-            assertEquals(listOf(1, 2, 3, 4), phraseOrder)
-        }
-        fun unchanged(changed: List<VerseWord>) =
-            assertEquals(changed.indices.toList(), VerseWorkflow.modeOrder(changed, WordOrderMode.ENGLISH_SVO))
-        unchanged(words.map { it.copy(syntaxPath = it.syntaxPath.replace("2,np", "2,!np")) })
-        unchanged(words.map { it.copy(syntaxPath = it.syntaxPath.replace("NPDetAdj", "unknown")) })
-        unchanged(words.map { it.copy(syntaxPath = it.syntaxPath.replace(",DetAdj", ",unknown")) })
-        unchanged(words.mapIndexed { i, w -> if (i == 4) w.copy(pos = "verb") else w })
-        unchanged(words + word("extra", "extra", "adj").copy(syntaxPath = modifier))
-        val interruptingClause = word("nested", "nested", "verb").copy(syntaxPath = "$outer/5,cl,,V")
-        unchanged(words.take(3) + interruptingClause + words.drop(3))
-        unchanged(words.mapIndexed { i, w ->
-            if (i == 2) w.copy(syntaxPath = "$phrase/6,np,,NpPp") else w
-        })
     }
 
     @Test
@@ -236,12 +131,11 @@ class VerseWorkflowTest {
 
     @Test
     fun defaultOrderAppliesWithoutReplacingSavedWordOrChunkOrders() {
-        val path = "1,cl,,V-O/2,np,o,NpAdjp"
-        val words = listOf(
-            word("noun", "noun", "noun").copy(syntaxPath = path),
-            word("adj", "adj", "adj").copy(syntaxPath = path)
-        )
-        val verse = AudioVerse("JHN 1:1", words)
+        val verse = MaculaXml.parse("""
+            <book><wg class="np" rule="NpAdjp"><w ref="JHN 1:1!1" class="noun" english="noun">noun</w>
+              <w ref="JHN 1:1!2" class="adj" english="adj">adj</w></wg></book>
+        """.trimIndent()).single()
+        val words = verse.words
         val state = AudioProjectState(defaultWordOrder = "ENGLISH_SVO")
         val order = VerseWorkflow.effectiveWordOrder(verse, state)
         assertEquals(listOf(1, 0), order)

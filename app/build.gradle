@@ -9,8 +9,8 @@ def clipDemo = project.hasProperty('clipDemo')
 
 tasks.register('generateMaculaAssets', Exec) {
     inputs.files(rootProject.file('scripts/generate-macula-assets.sh'),
-        rootProject.file('scripts/generate-macula-verses.mjs'),
-        rootProject.file('scripts/macula-syntax.py'))
+        rootProject.file('scripts/prepare-macula-books.py'),
+        rootProject.file('scripts/generate-recording-plan.mjs'))
     outputs.dir(maculaAssets)
     commandLine 'bash', rootProject.file('scripts/generate-macula-assets.sh'),
         maculaAssets.get().asFile.absolutePath

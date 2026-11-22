@@ -48,22 +48,27 @@
                     android:textAppearance="?attr/textAppearanceBodyMedium" />
             </com.google.android.material.card.MaterialCardView>
 
-            <Spinner
-                android:id="@+id/clip_guide_mode"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:contentDescription="Recording guide language" />
-            <HorizontalScrollView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:scrollbars="none">
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/clip_tokens"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    app:singleLine="true"
-                    app:chipSpacingHorizontal="4dp" />
-            </HorizontalScrollView>
+                android:orientation="horizontal">
+                <FrameLayout
+                    android:id="@+id/clip_order_container"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1" />
+                <Spinner
+                    android:id="@+id/clip_guide_mode"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:contentDescription="Recording guide language" />
+            </LinearLayout>
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/clip_tokens"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:chipSpacingHorizontal="4dp" />
             <EditText
                 android:id="@+id/clip_custom_guide"
                 android:layout_width="match_parent"
@@ -76,13 +81,6 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/clip_record"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Record verse"
-                    app:icon="@android:drawable/ic_btn_speak_now" />
                 <com.google.android.material.chip.Chip
                     android:id="@+id/clip_progress"
                     android:layout_width="wrap_content"
@@ -183,24 +181,25 @@
             </LinearLayout>
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Boundary times (seconds)"
-                android:textAppearance="?attr/textAppearanceLabelLarge" />
-            <EditText
-                android:id="@+id/clip_start"
+                android:id="@+id/clip_trim_start_label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Start"
-                android:inputType="numberDecimal"
-                android:singleLine="true" />
-            <EditText
-                android:id="@+id/clip_end"
+                android:text="Trim start (milliseconds): 0" />
+            <SeekBar
+                android:id="@+id/clip_trim_start"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="End"
-                android:inputType="numberDecimal"
-                android:singleLine="true" />
+                android:contentDescription="Trim start in milliseconds" />
+            <TextView
+                android:id="@+id/clip_trim_end_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Trim end (milliseconds): 0" />
+            <SeekBar
+                android:id="@+id/clip_trim_end"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:contentDescription="Trim end in milliseconds" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 

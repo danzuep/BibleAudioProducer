@@ -195,7 +195,7 @@ class VerseSliceEditorTest {
                 assertEquals(listOf(1, 2, 0), order.map { it.originalIndex })
                 assertEquals(listOf(0, 800, 1600, 2400), points.snapshot())
                 assertTrue(reviewed.isEmpty())
-                assertEquals("0.100000", (field("start").get(editor) as EditText).text.toString())
+                assertEquals(1600, points.start(2))
                 root.findViewById<RecyclerView>(R.id.clip_cards).scrollToPosition(1)
             }
             instrumentation.waitForIdleSync()
@@ -205,7 +205,10 @@ class VerseSliceEditorTest {
                 val card = checkNotNull(recycler.findViewHolderForAdapterPosition(1)).itemView
                 val assign = card.findViewById<Button>(R.id.word_assign)
                 assertTrue(assign.isEnabled)
-                assertTrue(assign.performClick())
+                val move = VerseTakeEditor::class.java.getDeclaredMethod(
+                    "assignWord", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+                ).apply { isAccessible = true }
+                assertEquals(true, move.invoke(editor, 0, 1))
                 @Suppress("UNCHECKED_CAST")
                 val order = field("words").get(editor) as List<VerseRecordingWord>
                 assertEquals(listOf(1, 0, 2), order.map { it.originalIndex })
@@ -218,7 +221,7 @@ class VerseSliceEditorTest {
     }
 
     @Test
-    fun waveformAndTypedBoundariesStaySharedWhenCardsReorder() {
+    fun waveformBoundariesStaySharedWhenCardsReorder() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val words = context.assets.open("books/JHN.xml").bufferedReader().use {
             MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
@@ -253,8 +256,8 @@ class VerseSliceEditorTest {
                 touch(MotionEvent.ACTION_UP, 120f)
                 assertEquals(boundaries.end(0), boundaries.start(1))
                 assertTrue(boundaries.end(0) in 470..490)
-                (field("end").get(editor) as EditText).setText("0.035000")
-                assertEquals(true, invoke("rememberSelection"))
+                boundaries.move(1, 560)
+                invoke("showSelection")
                 assertEquals(560, boundaries.end(0))
                 assertEquals(560, boundaries.start(1))
                 waveform.show(samples, boundaries.snapshot(), 0)
@@ -269,12 +272,6 @@ class VerseSliceEditorTest {
                     .apply { isAccessible = true }.invoke(editor, 0, 1)
                 assertEquals(listOf(1, 0, 2), reordered)
                 assertEquals(620, boundaries.start(1))
-                (field("end").get(editor) as EditText).setText("0")
-                val rejected = VerseTakeEditor::class.java.getDeclaredMethod(
-                    "moveCard", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
-                ).apply { isAccessible = true }.invoke(editor, 1, 0)
-                assertEquals(false, rejected)
-                assertEquals(listOf(1, 0, 2), reordered)
                 editor.dispose()
             }
         }
@@ -321,8 +318,8 @@ class VerseSliceEditorTest {
                 assertEquals(listOf(4, 0, 2), reordered)
                 assertEquals(listOf(0, 400, 900, 1600), boundaries.snapshot())
                 assertEquals("english2 · english0 · english1", guideText())
-                assertEquals("0.056250", (field("start").get(editor) as EditText).text.toString())
-                assertEquals("0.100000", (field("end").get(editor) as EditText).text.toString())
+                assertEquals(900, boundaries.start(2))
+                assertEquals(1600, boundaries.end(2))
                 field("guideMode").setInt(editor, 1)
                 invoke("updateGuide")
                 assertEquals("chinese2 · chinese0 · [translation needed]", guideText())
@@ -339,15 +336,13 @@ class VerseSliceEditorTest {
                 @Suppress("UNCHECKED_CAST")
                 val reviewed = field("reviewed").get(editor) as MutableSet<Int>
                 reviewed.addAll(listOf(0, 1))
-                (field("end").get(editor) as EditText).setText("0.031250")
                 guide.getChildAt(1).performClick()
                 assertEquals(1, field("index").getInt(editor))
-                assertEquals(emptySet<Int>(), reviewed)
-                assertEquals(500, boundaries.end(0))
-                assertEquals("0.031250", (field("start").get(editor) as EditText).text.toString())
+                assertEquals(setOf(0, 1), reviewed)
+                assertEquals(400, boundaries.end(0))
                 invoke("advance")
                 assertEquals(2, field("index").getInt(editor))
-                assertEquals(setOf(1), reviewed)
+                assertEquals(setOf(0, 1), reviewed)
                 editor.dispose()
             }
         }
@@ -425,7 +420,7 @@ class VerseSliceEditorTest {
                 scenario.onActivity {
                     VerseTakeEditor::class.java.getDeclaredMethod("moveCard", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
                         .apply { isAccessible = true }.invoke(editor, 1, 0)
-                    assertEquals("0.000000", (field("start").get(editor) as EditText).text.toString())
+                    assertEquals(0, (field("boundaries").get(editor) as VerseBoundaries).start(0))
                     VerseTakeEditor::class.java.getDeclaredMethod("selectCard", Int::class.javaPrimitiveType)
                         .apply { isAccessible = true }.invoke(editor, 1)
                     assertEquals(0, reviewedCount())
@@ -454,12 +449,8 @@ class VerseSliceEditorTest {
                     words, { true }, {}, {}, {}
                 )
                 val root = editor.view()
-                fun containsSeekBar(view: View): Boolean =
-                    view is android.widget.SeekBar || (view is android.view.ViewGroup &&
-                        (0 until view.childCount).any { containsSeekBar(view.getChildAt(it)) })
-                assertTrue(!containsSeekBar(root))
-                assertTrue(root.findViewById<EditText>(R.id.clip_start) != null)
-                assertTrue(root.findViewById<EditText>(R.id.clip_end) != null)
+                assertTrue(root.findViewById<android.widget.SeekBar>(R.id.clip_trim_start) != null)
+                assertTrue(root.findViewById<android.widget.SeekBar>(R.id.clip_trim_end) != null)
                 fun field(name: String) = VerseTakeEditor::class.java.getDeclaredField(name).apply { isAccessible = true }
                 fun invoke(name: String) = VerseTakeEditor::class.java.getDeclaredMethod(name)
                     .apply { isAccessible = true }.invoke(editor)
@@ -491,6 +482,48 @@ class VerseSliceEditorTest {
                 assertTrue(bottom.parent is ConstraintLayout)
                 assertEquals(root, bottom.parent)
                 editor.dispose()
+            }
+        }
+
+        @Test
+        fun trimSlidersChangeOnlySelectedClipAndNeverProduceAnEmptySlice() {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+                MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(2)
+            }.mapIndexed { index, word -> VerseRecordingWord(word, index) }
+            ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val editor = VerseTakeEditor(
+                        activity, AudioProjectRepository(File(context.cacheDir, "slice-trim-test")),
+                        words, { true }, {}, {}, {}
+                    )
+                    val root = editor.view()
+                    fun field(name: String) = VerseTakeEditor::class.java.getDeclaredField(name).apply { isAccessible = true }
+                    fun invoke(name: String) = VerseTakeEditor::class.java.getDeclaredMethod(name)
+                        .apply { isAccessible = true }.invoke(editor)
+                    val boundaries = VerseBoundaries(listOf(0, 1600, 3200))
+                    field("samples").set(editor, FloatArray(3200))
+                    field("boundaries").set(editor, boundaries)
+                    invoke("showSelection")
+                    invoke("refresh")
+                    @Suppress("UNCHECKED_CAST")
+                    val reviewed = field("reviewed").get(editor) as MutableSet<Int>
+                    reviewed.addAll(listOf(0, 1))
+                    val setTrim = VerseTakeEditor::class.java.getDeclaredMethod(
+                        "setTrim", Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType
+                    ).apply { isAccessible = true }
+                    setTrim.invoke(editor, true, 20)
+                    setTrim.invoke(editor, false, 30)
+                    assertEquals(320 to 1120, invoke("selection"))
+                    assertEquals(listOf(0, 1600, 3200), boundaries.snapshot())
+                    assertEquals(setOf(1), reviewed)
+                    assertEquals(20, root.findViewById<android.widget.SeekBar>(R.id.clip_trim_start).progress)
+                    assertEquals(30, root.findViewById<android.widget.SeekBar>(R.id.clip_trim_end).progress)
+                    setTrim.invoke(editor, false, 1000)
+                    val selection = invoke("selection") as Pair<*, *>
+                    assertTrue((selection.first as Int) < (selection.second as Int))
+                    editor.dispose()
+                }
             }
         }
     }

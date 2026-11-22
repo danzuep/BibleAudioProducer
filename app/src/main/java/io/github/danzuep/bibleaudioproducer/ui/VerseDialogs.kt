@@ -26,6 +26,7 @@ import io.github.danzuep.bibleaudioproducer.workbench.AudioProjectState
 import io.github.danzuep.bibleaudioproducer.workbench.AudioVerse
 import io.github.danzuep.bibleaudioproducer.workbench.RecordingCard
 import io.github.danzuep.bibleaudioproducer.workbench.VerseWord
+import io.github.danzuep.bibleaudioproducer.workbench.VerseRecordingWord
 import io.github.danzuep.bibleaudioproducer.workbench.VerseWorkflow
 import kotlin.math.max
 
@@ -337,6 +338,7 @@ internal class VerseDialogs(
                     val next = VerseWorkflow.modeOrder(verse, mode)
                     if (next != order) {
                         order = next.toMutableList()
+                        takeEditor?.syncWords(VerseWorkflow.recordingWords(verse.words, order, unspoken))
                         renderWords()
                     }
                     changed = true
@@ -348,8 +350,6 @@ internal class VerseDialogs(
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
         }
-        controls.addView(orderMode)
-        root.addView(controls)
         lateinit var flow: VerseFlowLayout
         lateinit var scroll: ScrollView
         val editorContainer = FrameLayout(activity).apply { visibility = View.GONE }
@@ -374,7 +374,6 @@ internal class VerseDialogs(
                     flow.visibility = View.VISIBLE
                     controls.visibility = View.VISIBLE
                     hint.visibility = View.VISIBLE
-                    orderMode.isEnabled = true
                     renderWords()
                     refreshControls()
                 }
@@ -395,7 +394,39 @@ internal class VerseDialogs(
                     changed = false
                     back()
                     actions.completeVerse(verse, order.toList(), unspoken.toSet())
-                }, verse.reference)
+                }, verse.reference, orderMode,
+                { order.map { VerseRecordingWord(verse.words[it], it) } },
+                { word -> word.disabled(unspoken) },
+                { scriptOrder ->
+                    order = scriptOrder.toMutableList()
+                    selecting = true
+                    orderMode.setSelection(WordOrderMode.CUSTOM.ordinal)
+                    selecting = false
+                    selectedMode = WordOrderMode.CUSTOM
+                    changed = true
+                    takeEditor?.syncWords(VerseWorkflow.recordingWords(verse.words, order, unspoken))
+                },
+                { entry ->
+                    showWordDetails(entry.word, entry.word.disabled(unspoken)) { disabled ->
+                        if (takeEditor?.canChangeSpoken() != true) {
+                            android.widget.Toast.makeText(activity, "Discard the take before changing spoken words.", android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            wordToggle@ run {
+                                val updated = unspoken.toMutableSet()
+                                entry.word.withDisabled(updated, disabled)
+                                val cards = VerseWorkflow.recordingWords(verse.words, order, updated)
+                                if (cards.isEmpty()) {
+                                    android.widget.Toast.makeText(activity, "Keep at least one word enabled.", android.widget.Toast.LENGTH_LONG).show()
+                                    return@wordToggle
+                                }
+                                unspoken.clear()
+                                unspoken.addAll(updated)
+                                changed = true
+                                takeEditor?.syncWords(cards)
+                            }
+                        }
+                    }
+                })
             takeEditor = editor
             header.visibility = View.GONE
             scroll.visibility = View.GONE
@@ -406,7 +437,6 @@ internal class VerseDialogs(
             flow.visibility = View.GONE
             controls.visibility = View.GONE
             hint.visibility = View.GONE
-            orderMode.isEnabled = false
             editorContainer.addView(editor.view(), FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
             ))
@@ -557,7 +587,6 @@ internal class VerseDialogs(
                     flow.visibility = View.VISIBLE
                     controls.visibility = View.VISIBLE
                     hint.visibility = View.VISIBLE
-                    orderMode.isEnabled = true
                     renderWords()
                     refreshControls()
                 }
@@ -613,12 +642,11 @@ internal class VerseDialogs(
             leftMargin = dp(4)
         })
         root.addView(header)
-        lateinit var dialog: AlertDialog
         root.addView(MaterialButton(activity).apply {
             setText(if (disabled) R.string.audio_word_restore else R.string.audio_word_disable)
             setOnClickListener {
                 onToggleDisabled(!disabled)
-                dialog.dismiss()
+                back()
             }
         })
         root.addView(MaterialButton(activity).apply {
@@ -657,8 +685,7 @@ internal class VerseDialogs(
         root.addView(scroll, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
-        dialog = AlertDialog.Builder(activity).setView(root).create()
-        close.setOnClickListener { dialog.dismiss() }
+        close.setOnClickListener { back() }
         val refresh = {
             val recorded = repository.clipFile(word.surface).isFile
             record.backgroundTintList = ColorStateList.valueOf(
@@ -676,14 +703,10 @@ internal class VerseDialogs(
                 if (actions.isPlaying(card)) R.string.audio_stop_word else R.string.audio_word_play, word.surface
             )
         }
-        refreshers.add(refresh)
-        refresh()
-        dialog.setOnDismissListener {
-            refreshers.remove(refresh)
+        push(root, refresh) {
             actions.stopPlayback()
+            true
         }
-        dialog.show()
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     private fun wordToken(word: VerseWord, unspoken: Boolean, recorded: Boolean, fontSize: Float): View {

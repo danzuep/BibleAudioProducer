@@ -20,24 +20,25 @@ icon to set the recording language, import plans or audio, export archives, or m
 Imports in a different language are rejected to prevent mixing projects. Plans and
 recordings remain in private storage; export them before uninstalling.
 
-In a verse, select a word-order mode or drag individual words, then tap the record
-button beside playback to open the recording editor. Record the enabled words' translations in the
+In a verse, tap the record button beside playback to open the recording editor, then
+select a word-order mode or drag individual script words. Record the enabled words' translations in the
 displayed card order; omit disabled words. Choose an English, Chinese, original Greek,
 transliteration, or custom recording guide. The app suggests boundaries at quiet points in
 recording order and shows them on a chronological waveform above the card deck. A live
-microphone waveform appears during recording. Tap a guide chip, slice or card to select it;
-drag its waveform handles, use the 10 ms nudge buttons, or enter seconds. The nudge
+microphone waveform appears during recording. Tap a slice or card to select it;
+drag its waveform handles or use the 10 ms nudge buttons. The nudge
 buttons move the selected slice's end boundary
-(or its start for the last slice). The app suggests skipping leading silence while keeping
-the original take; adjust the first start handle or time to restore audio if needed.
+(or its start for the last slice). Trim sliders remove milliseconds from the selected
+clip's start and end without moving shared boundaries. The app suggests skipping leading
+silence while keeping the original take; adjust the first start handle to restore audio if needed.
 The recording end is fixed. The waveform initially shows one second around the first word;
 zoom follows the selected slice. Adjacent slices share their boundary: moving it
 changes both clips and requires reviewing both again. Cards always follow audio order.
 Drag a card's handle to change its position, or drop the card onto a waveform segment.
-Alternatively select a segment and tap **Use selected** on the desired card. Moving a
-card shifts the intervening cards without changing boundaries; every affected clip must
+Moving a card shifts the intervening cards without changing boundaries; every affected clip must
 be reviewed again. Previously saved clips remain unchanged until saved again.
-Preview each clip and use **Next** to save it, or **Keep & next** to keep its existing clip.
+Preview each clip and use **Next** or its check mark to save and advance, or **Keep & next**
+to keep its existing clip. A green check mark indicates a saved recording.
 The Android editor currently maps one spoken slice to each enabled Greek form; editable
 card text, split/merge, unassigned blobs and alignment ZIP export
 remain available only in the separate browser slicer below.
@@ -54,6 +55,9 @@ verses. Selecting a preset in John 3:16 saves it immediately as this project's d
 even without recording. Original order and Custom do not replace that default.
 Subsequent verses use it for the editor, recorded playback and export unless they
 already have a saved order; a custom order is specific to its verse.
+The recorder's script includes the word-order and guide-language selectors; drag script
+words to reorder them or tap one for its details. Changing enabled words requires
+discarding the current take first.
 
 Word-order presets are starting points, not translations. The bundled Greek data uses
 [MACULA's pinned lowfat XML syntax trees](https://github.com/Clear-Bible/macula-greek/tree/8423afe47b9e8f24b7772e808af45c7159a6fe7e/SBLGNT/lowfat)

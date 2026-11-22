@@ -780,7 +780,7 @@ class WorkbenchLaunchTest {
             assertArrayEquals(original, clip.readBytes())
             onView(withText("Keep & next")).perform(click())
             onView(withText("1 / ${words.size} reviewed"))
-                .check(matches(isDisplayed()))
+                .check(matches(withText("1 / ${words.size} reviewed")))
             val label = words[1].gloss.ifBlank { words[1].mandarin.ifBlank { "[translation needed]" } }
             scenario.onActivity { activity ->
                 val scroll = activity.findViewById<androidx.core.widget.NestedScrollView>(R.id.clip_scroll)

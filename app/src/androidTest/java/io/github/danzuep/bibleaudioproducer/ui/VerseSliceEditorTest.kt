@@ -525,6 +525,62 @@ class VerseSliceEditorTest {
                     editor.dispose()
                 }
             }
+
+            @Test
+            fun checkMarkSavesItsCardAndAdvances() {
+                val context = ApplicationProvider.getApplicationContext<Context>()
+                val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+                    MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }
+                        .distinctBy { it.surface }.take(3)
+                }.mapIndexed { index, word -> VerseRecordingWord(word, index) }
+                val directory = File(context.cacheDir, "slice-check-test")
+                directory.deleteRecursively()
+                val repository = AudioProjectRepository(directory)
+                try {
+                    ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
+                        lateinit var editor: VerseTakeEditor
+                        lateinit var root: View
+                        fun field(name: String) = VerseTakeEditor::class.java.getDeclaredField(name).apply { isAccessible = true }
+                        scenario.onActivity { activity ->
+                            editor = VerseTakeEditor(activity, repository, words, { true }, {}, {}, {})
+                            root = editor.view()
+                            activity.setContentView(root)
+                            field("samples").set(editor, FloatArray(2400) { 0.1f })
+                            field("boundaries").set(editor, VerseBoundaries(listOf(0, 800, 1600, 2400)))
+                            for (method in listOf("showSelection", "refresh")) {
+                                VerseTakeEditor::class.java.getDeclaredMethod(method).apply { isAccessible = true }.invoke(editor)
+                            }
+                            root.findViewById<androidx.core.widget.NestedScrollView>(R.id.clip_scroll).scrollTo(0, 1000)
+                            root.findViewById<RecyclerView>(R.id.clip_cards).scrollToPosition(1)
+                        }
+                        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                        scenario.onActivity {
+                            val cards = root.findViewById<RecyclerView>(R.id.clip_cards)
+                            val holder = checkNotNull(cards.findViewHolderForAdapterPosition(1))
+                            assertTrue(holder.itemView.findViewById<Button>(R.id.word_assign).performClick())
+                        }
+                        val deadline = System.currentTimeMillis() + 15_000
+                        var advanced = false
+                        while (!advanced && System.currentTimeMillis() < deadline) {
+                            scenario.onActivity { advanced = field("index").getInt(editor) == 2 }
+                            if (!advanced) Thread.sleep(50)
+                        }
+                        assertTrue("Saving the selected card did not advance", advanced)
+                        assertArrayEquals(VerseAudio.encodeWav(VerseAudio.slice(FloatArray(2400) { 0.1f }, 800, 1600)),
+                            repository.clipFile(words[1].word.surface).readBytes())
+                        scenario.onActivity {
+                            val cards = root.findViewById<RecyclerView>(R.id.clip_cards)
+                            val button = checkNotNull(cards.findViewHolderForAdapterPosition(1))
+                                .itemView.findViewById<Button>(R.id.word_assign)
+                            assertEquals(androidx.core.content.ContextCompat.getColor(context, R.color.workbench_recorded),
+                                button.currentTextColor)
+                            editor.dispose()
+                        }
+                    }
+                } finally {
+                    directory.deleteRecursively()
+                }
+            }
         }
     }
 }

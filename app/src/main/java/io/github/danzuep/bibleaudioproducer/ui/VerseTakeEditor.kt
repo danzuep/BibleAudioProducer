@@ -185,7 +185,7 @@ internal class VerseTakeEditor(
         }
         content.findViewById<Spinner>(R.id.clip_guide_mode).apply {
             adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("English", "Chinese", "Original", "Transliteration", "Custom"))
+                listOf("Gloss: English", "Gloss: Chinese", "Greek", "Transliteration", "Custom script"))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     guideMode = position

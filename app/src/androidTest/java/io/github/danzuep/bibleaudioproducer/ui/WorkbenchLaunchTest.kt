@@ -122,6 +122,35 @@ class WorkbenchLaunchTest {
             val verses = context.assets.open("books/JHN.xml").bufferedReader().use {
                 MaculaXml.parse(it.readText())
             }
+
+            @Test
+            fun recorderScriptOpensWordDetailsAndCanDisableAWordBeforeRecording() {
+                val context = ApplicationProvider.getApplicationContext<Context>()
+                val verse = context.assets.open("books/JHN.xml").bufferedReader().use {
+                    MaculaXml.parse(it.readText()).first { it.reference == "JHN 3:16" }
+                }
+                val wordIndex = verse.words.indexOfFirst { !it.disabled(emptySet()) }
+                val word = verse.words[wordIndex]
+                ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
+                    awaitBooks(scenario, 27)
+                    onView(withId(R.id.audio_verse_record)).perform(click())
+                    onView(withId(R.id.audio_verse_word_order)).check(matches(isDisplayed()))
+                    onView(withId(R.id.clip_guide_mode)).check(matches(isDisplayed()))
+                    scenario.onActivity { activity ->
+                        val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                        assertEquals(verse.words.size, chips.childCount)
+                        assertTrue(chips.getChildAt(wordIndex).performClick())
+                    }
+                    onView(withText("${context.getString(R.string.audio_word_field_surface)}: ${word.surface}"))
+                        .check(matches(isDisplayed()))
+                    onView(withText(R.string.audio_word_disable)).perform(click())
+                    scenario.onActivity { activity ->
+                        val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                        assertEquals(verse.words.size, chips.childCount)
+                        assertTrue(chips.getChildAt(wordIndex).alpha < 1f)
+                    }
+                }
+            }
             val first = verses.first { it.reference == "JHN 1:1" }
             val repository = AudioProjectRepository(directory)
             fun select(label: Int) {

@@ -411,14 +411,12 @@ internal class VerseDialogs(
                         if (takeEditor?.canChangeSpoken() != true) {
                             android.widget.Toast.makeText(activity, "Discard the take before changing spoken words.", android.widget.Toast.LENGTH_LONG).show()
                         } else {
-                            wordToggle@ run {
-                                val updated = unspoken.toMutableSet()
-                                entry.word.withDisabled(updated, disabled)
-                                val cards = VerseWorkflow.recordingWords(verse.words, order, updated)
-                                if (cards.isEmpty()) {
-                                    android.widget.Toast.makeText(activity, "Keep at least one word enabled.", android.widget.Toast.LENGTH_LONG).show()
-                                    return@wordToggle
-                                }
+                            val updated = unspoken.toMutableSet()
+                            entry.word.withDisabled(updated, disabled)
+                            val cards = VerseWorkflow.recordingWords(verse.words, order, updated)
+                            if (cards.isEmpty()) {
+                                android.widget.Toast.makeText(activity, "Keep at least one word enabled.", android.widget.Toast.LENGTH_LONG).show()
+                            } else {
                                 unspoken.clear()
                                 unspoken.addAll(updated)
                                 changed = true

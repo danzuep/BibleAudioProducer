@@ -1,4 +1,5 @@
 <resources>
+    <item name="clip_record" type="id" />
     <item name="audio_verse_close" type="id" />
     <item name="audio_verse_more" type="id" />
     <item name="audio_verse_record" type="id" />

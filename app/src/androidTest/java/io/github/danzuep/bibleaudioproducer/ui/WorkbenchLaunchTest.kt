@@ -122,6 +122,7 @@ class WorkbenchLaunchTest {
             val verses = context.assets.open("books/JHN.xml").bufferedReader().use {
                 MaculaXml.parse(it.readText())
             }
+
             val first = verses.first { it.reference == "JHN 1:1" }
             val repository = AudioProjectRepository(directory)
             fun select(label: Int) {
@@ -151,30 +152,35 @@ class WorkbenchLaunchTest {
                 awaitBooks(scenario, 27)
                 onView(withText("JHN 3:16")).check(matches(isDisplayed()))
                 assertEquals(null, repository.loadState().defaultWordOrder)
+                onView(withId(R.id.audio_verse_record)).perform(click())
                 select(R.string.audio_word_order_english)
                 waitForDefault("ENGLISH_SVO")
                 scenario.recreate()
                 awaitBooks(scenario, 27)
                 onView(withText("JHN 3:16")).check(matches(isDisplayed()))
+                onView(withId(R.id.audio_verse_record)).perform(click())
                 select(R.string.audio_word_order_greek)
                 select(R.string.audio_word_order_custom)
-                onView(withId(R.id.audio_verse_record)).perform(click())
                 pressBack()
                 onView(withId(R.id.audio_verse_close)).perform(click())
                 waitForSave(scenario)
                 waitForDefault("ENGLISH_SVO")
                 onView(withId(R.id.audio_choose_verse)).perform(click())
                 onView(withContentDescription(first.words.joinToString(" ") { it.surface })).perform(click())
+                onView(withId(R.id.audio_verse_record)).perform(click())
                 onView(withId(R.id.audio_verse_word_order)).check { view, _ ->
                     assertEquals(context.getString(R.string.audio_word_order_english), (view as Spinner).selectedItem)
                 }
                 select(R.string.audio_word_order_japanese)
+                pressBack()
                 onView(withId(R.id.audio_verse_close)).perform(click())
                 waitForSave(scenario)
                 onView(withContentDescription(first.words.joinToString(" ") { it.surface })).perform(click())
+                onView(withId(R.id.audio_verse_record)).perform(click())
                 onView(withId(R.id.audio_verse_word_order)).check { view, _ ->
                     assertEquals(context.getString(R.string.audio_word_order_japanese), (view as Spinner).selectedItem)
                 }
+                pressBack()
                 onView(withId(R.id.audio_verse_close)).perform(click())
                 waitForSave(scenario)
                 scenario.recreate()
@@ -190,10 +196,40 @@ class WorkbenchLaunchTest {
                 onView(withText("Project002")).perform(click())
                 assertTrue(awaitBookCount(scenario, 27, 15_000))
                 assertEquals(null, AudioProjectRepository(other).loadState().defaultWordOrder)
+                onView(withId(R.id.audio_verse_record)).perform(click())
                 select(R.string.audio_word_order_japanese)
                 assertEquals("JAPANESE_SOV", AudioProjectRepository(other).loadState().defaultWordOrder)
                 assertEquals("ENGLISH_SVO", repository.loadState().defaultWordOrder)
             }
+    }
+
+    @Test
+    fun recorderScriptOpensWordDetailsAndCanDisableAWordBeforeRecording() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val verse = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first { it.reference == "JHN 3:16" }
+        }
+        val wordIndex = verse.words.indexOfFirst { !it.disabled(emptySet()) }
+        val word = verse.words[wordIndex]
+        ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
+            awaitBooks(scenario, 27)
+            onView(withId(R.id.audio_verse_record)).perform(click())
+            onView(withId(R.id.audio_verse_word_order)).check(matches(isDisplayed()))
+            onView(withId(R.id.clip_guide_mode)).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                assertEquals(verse.words.size, chips.childCount)
+                assertTrue(chips.getChildAt(wordIndex).performClick())
+            }
+            onView(withText("${context.getString(R.string.audio_word_field_surface)}: ${word.surface}"))
+                .check(matches(isDisplayed()))
+            onView(withText(R.string.audio_word_disable)).perform(click())
+            scenario.onActivity { activity ->
+                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                assertEquals(verse.words.size, chips.childCount)
+                assertTrue(chips.getChildAt(wordIndex).alpha < 1f)
+            }
+        }
     }
 
     @Test
@@ -720,14 +756,14 @@ class WorkbenchLaunchTest {
             check(clip.parentFile!!.mkdirs() || clip.parentFile!!.isDirectory)
             val original = VerseAudio.encodeWav(FloatArray(16000) { 0.1f })
             clip.writeBytes(original)
+            onView(withId(R.id.audio_verse_record)).perform(click())
             onView(withId(R.id.audio_verse_word_order)).perform(click())
             onData(`is`(context.getString(R.string.audio_word_order_greek))).perform(click())
-            onView(withId(R.id.audio_verse_record)).perform(click())
             onView(withId(R.id.clip_toolbar)).check(matches(isDisplayed()))
             onView(withId(R.id.audio_workbench_toolbar)).check(matches(org.hamcrest.Matchers.not(isDisplayed())))
-            onView(withText("Record verse")).perform(click())
+            onView(withContentDescription("Record verse")).perform(click())
             Thread.sleep(1000)
-            onView(withText("Stop recording")).perform(click())
+            onView(withContentDescription("Stop recording")).perform(click())
             val deadline = System.currentTimeMillis() + 15_000
             var ready = false
             while (!ready && System.currentTimeMillis() < deadline) {
@@ -744,7 +780,7 @@ class WorkbenchLaunchTest {
             assertArrayEquals(original, clip.readBytes())
             onView(withText("Keep & next")).perform(click())
             onView(withText("1 / ${words.size} reviewed"))
-                .check(matches(isDisplayed()))
+                .check(matches(withText("1 / ${words.size} reviewed")))
             val label = words[1].gloss.ifBlank { words[1].mandarin.ifBlank { "[translation needed]" } }
             scenario.onActivity { activity ->
                 val scroll = activity.findViewById<androidx.core.widget.NestedScrollView>(R.id.clip_scroll)

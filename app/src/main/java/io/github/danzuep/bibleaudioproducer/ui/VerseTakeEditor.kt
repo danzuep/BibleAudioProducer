@@ -13,6 +13,8 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
+import android.widget.SeekBar
+import android.widget.FrameLayout
 import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.TextView
@@ -37,12 +39,12 @@ import io.github.danzuep.bibleaudioproducer.audio.VerseAudio
 import io.github.danzuep.bibleaudioproducer.audio.VerseBoundaries
 import io.github.danzuep.bibleaudioproducer.data.AudioProjectRepository
 import io.github.danzuep.bibleaudioproducer.workbench.VerseRecordingWord
+import io.github.danzuep.bibleaudioproducer.workbench.VerseWord
 import java.io.File
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 import java.util.concurrent.Executors
-import kotlin.math.roundToInt
 
 /** A take is private to this editor until the user explicitly saves each mapping. */
 internal class VerseTakeEditor(
@@ -53,7 +55,12 @@ internal class VerseTakeEditor(
     private val onReorder: (List<Int>) -> Unit,
     private val onBack: () -> Unit,
     private val onComplete: () -> Unit,
-    private val reference: String = "Verse recording"
+    private val reference: String = "Verse recording",
+    private val orderControl: Spinner? = null,
+    private val scriptWords: (() -> List<VerseRecordingWord>)? = null,
+    private val isUnspoken: (VerseWord) -> Boolean = { false },
+    private val onScriptReorder: ((List<Int>) -> Unit)? = null,
+    private val onWordDetails: ((VerseRecordingWord) -> Unit)? = null
 ) {
     private val io = Executors.newSingleThreadExecutor()
     private val words = words.toMutableList()
@@ -83,8 +90,12 @@ internal class VerseTakeEditor(
     private lateinit var tokens: ChipGroup
     private lateinit var customGuide: EditText
     private var guideMode = 0
-    private lateinit var start: EditText
-    private lateinit var end: EditText
+    private lateinit var trimStart: SeekBar
+    private lateinit var trimEnd: SeekBar
+    private lateinit var trimStartLabel: TextView
+    private lateinit var trimEndLabel: TextView
+    private var updatingTrim = false
+    private val trims = mutableMapOf<Int, Pair<Int, Int>>()
     private lateinit var status: TextView
     private lateinit var timing: TextView
     private lateinit var help: View
@@ -138,6 +149,21 @@ internal class VerseTakeEditor(
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = playTake
         }
+        record = MaterialButton(context).apply {
+            id = R.id.clip_record
+            layoutParams = ViewGroup.LayoutParams(dp(48), dp(48))
+            cornerRadius = dp(24)
+            insetTop = 0
+            insetBottom = 0
+            setPadding(0, 0, 0, 0)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setIconResource(android.R.drawable.ic_btn_speak_now)
+            setOnClickListener { toggleRecord() }
+        }
+        toolbar.menu.add("Record verse").apply {
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            actionView = record
+        }
         toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
             setIcon(android.R.drawable.ic_menu_info_details)
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
@@ -152,9 +178,14 @@ internal class VerseTakeEditor(
         }
         tokens = content.findViewById(R.id.clip_tokens)
         customGuide = content.findViewById(R.id.clip_custom_guide)
+        orderControl?.let { control ->
+            (control.parent as? ViewGroup)?.removeView(control)
+            content.findViewById<FrameLayout>(R.id.clip_order_container).addView(control,
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
         content.findViewById<Spinner>(R.id.clip_guide_mode).apply {
             adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("English", "Chinese", "Original", "Transliteration", "Custom"))
+                listOf("Gloss: English", "Gloss: Chinese", "Greek", "Transliteration", "Custom script"))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     guideMode = position
@@ -162,9 +193,6 @@ internal class VerseTakeEditor(
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-        }
-        record = content.findViewById<Button>(R.id.clip_record).apply {
-            setOnClickListener { toggleRecord() }
         }
         liveWaveform = content.findViewById(R.id.clip_live_waveform)
         waveform = content.findViewById<VerseSliceWaveform>(R.id.clip_waveform).apply {
@@ -174,7 +202,7 @@ internal class VerseTakeEditor(
             onBoundary = { boundary, sample ->
                 if (boundary in index..index + 1 && rememberSelection()) {
                     val changed = boundaries?.move(boundary, sample).orEmpty()
-                    reviewed.removeAll(changed)
+                    invalidateSlices(changed)
                     showSelection()
                     refresh()
                 }
@@ -228,8 +256,20 @@ internal class VerseTakeEditor(
         next = content.findViewById<Button>(R.id.clip_next).apply { setOnClickListener { saveSelection() } }
         nudgeBack = content.findViewById<Button>(R.id.clip_nudge_back).apply { setOnClickListener { nudge(-1) } }
         nudgeForward = content.findViewById<Button>(R.id.clip_nudge_forward).apply { setOnClickListener { nudge(1) } }
-        start = content.findViewById(R.id.clip_start)
-        end = content.findViewById(R.id.clip_end)
+        trimStart = content.findViewById(R.id.clip_trim_start)
+        trimEnd = content.findViewById(R.id.clip_trim_end)
+        trimStartLabel = content.findViewById(R.id.clip_trim_start_label)
+        trimEndLabel = content.findViewById(R.id.clip_trim_end_label)
+        val trimListener = object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (!fromUser || updatingTrim || boundaries == null) return
+                setTrim(bar === trimStart, progress)
+            }
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        }
+        trimStart.setOnSeekBarChangeListener(trimListener)
+        trimEnd.setOnSeekBarChangeListener(trimListener)
         previewExisting = content.findViewById<Button>(R.id.clip_preview_existing).apply {
             setOnClickListener {
                 stopPlayback()
@@ -259,6 +299,7 @@ internal class VerseTakeEditor(
     internal fun loadDemoTake(demoSamples: FloatArray) {
         samples = demoSamples
         boundaries = VerseBoundaries(VerseAudio.suggestBoundaries(samples, words.size))
+        trims.clear()
         reviewed.clear()
         index = 0
         showSelection()
@@ -289,6 +330,7 @@ internal class VerseTakeEditor(
                             if (!closed) {
                                 samples = decoded
                                 boundaries = VerseBoundaries(suggested)
+                                trims.clear()
                                 reviewed.clear()
                                 index = 0
                                 working = false
@@ -320,6 +362,7 @@ internal class VerseTakeEditor(
             waveformHandler.post(waveformSampler)
             samples = FloatArray(0)
             boundaries = null
+            trims.clear()
             reviewed.clear()
             refresh()
         } catch (e: Exception) {
@@ -330,14 +373,16 @@ internal class VerseTakeEditor(
 
     private fun refresh() {
         val ready = samples.isNotEmpty() && !working && !recording
-        record.text = if (recording) "Stop recording" else if (samples.isEmpty()) "Record verse" else "Record again"
+        (record as MaterialButton).setIconResource(if (recording) android.R.drawable.ic_media_pause else android.R.drawable.ic_btn_speak_now)
+        record.contentDescription = if (recording) "Stop recording" else if (samples.isEmpty()) "Record verse" else "Record again"
         record.isEnabled = !working
+        orderControl?.isEnabled = !working && !recording
         waveform.isEnabled = ready
         waveform.visibility = if (recording) View.INVISIBLE else View.VISIBLE
         liveWaveform.visibility = if (recording) View.VISIBLE else View.GONE
         val spoken = audioIndex(words[index])
-        start.isEnabled = ready
-        end.isEnabled = ready && spoken < words.lastIndex
+        trimStart.isEnabled = ready
+        trimEnd.isEnabled = ready
         next.isEnabled = ready
         previewExisting.isEnabled = ready && repository.clipFile(words[index].word.surface).isFile
         keep.isEnabled = ready && repository.clipFile(words[index].word.surface).isFile
@@ -376,13 +421,32 @@ internal class VerseTakeEditor(
         scrollToSelection()
     }
 
+    fun canChangeSpoken(): Boolean = samples.isEmpty() && !recording && !working
+
+    fun syncWords(updated: List<VerseRecordingWord>) {
+        require(updated.isNotEmpty())
+        val selected = words[index].originalIndex
+        val changed = words.map { it.originalIndex } != updated.map { it.originalIndex }
+        if (changed) {
+            require(boundaries == null || updated.size == words.size)
+            words.clear()
+            words.addAll(updated)
+            index = words.indexOfFirst { it.originalIndex == selected }.coerceAtLeast(0)
+            invalidateSlices(reviewed.toSet() + trims.keys)
+        }
+        if (::cards.isInitialized) {
+            showSelection()
+            refresh()
+        }
+    }
+
     private fun moveCard(from: Int, to: Int): Boolean {
         if (working || recording || from == to || from !in words.indices || to !in words.indices) return false
         if (boundaries != null && !rememberSelection()) return false
         val selected = words[index].originalIndex
         words.add(to, words.removeAt(from))
         if (boundaries != null) {
-            for (position in minOf(from, to)..maxOf(from, to)) reviewed.remove(position)
+            invalidateSlices((minOf(from, to)..maxOf(from, to)).toSet())
         }
         index = words.indexOfFirst { it.originalIndex == selected }
         onReorder(words.map { it.originalIndex })
@@ -457,9 +521,15 @@ internal class VerseTakeEditor(
                     holder.card.startDrag(null, View.DragShadowBuilder(holder.card), drag, 0)
                 }
             }
-            holder.assign.isEnabled = ready && spoken != audioIndex(words[index])
-            holder.assign.contentDescription = "Move ${targetLabel(word)} to selected audio segment"
-            holder.assign.setOnClickListener { assignWord(word.originalIndex, audioIndex(words[index])) }
+            holder.assign.isEnabled = ready
+            holder.assign.contentDescription = "Save ${targetLabel(word)} clip and next"
+            holder.assign.setTextColor(androidx.core.content.ContextCompat.getColor(activity,
+                if (repository.clipFile(word.word.surface).isFile) R.color.workbench_recorded
+                else R.color.workbench_primary))
+            holder.assign.setOnClickListener {
+                val current = holder.bindingAdapterPosition
+                if (current != RecyclerView.NO_POSITION && (current == index || selectCardForPreview(current))) saveSelection()
+            }
             holder.play.setOnClickListener {
                 val current = holder.bindingAdapterPosition
                 if (current != RecyclerView.NO_POSITION && (current == index || selectCardForPreview(current))) previewSelection()
@@ -476,51 +546,61 @@ internal class VerseTakeEditor(
     private fun showSelection() {
         val spokenIndex = audioIndex(words[index])
         val points = boundaries ?: return
-        start.setText(seconds(points.start(spokenIndex)))
-        end.setText(seconds(points.end(spokenIndex)))
+        val (firstTrim, lastTrim) = trims[spokenIndex] ?: (0 to 0)
+        updatingTrim = true
+        trimStart.max = trimMaximum(spokenIndex)
+        trimEnd.max = trimMaximum(spokenIndex)
+        trimStart.progress = firstTrim
+        trimEnd.progress = lastTrim
+        trimStartLabel.text = "Trim start (milliseconds): $firstTrim"
+        trimEndLabel.text = "Trim end (milliseconds): $lastTrim"
+        updatingTrim = false
         waveform.show(samples, points.snapshot(), spokenIndex)
         keep.isEnabled = repository.clipFile(words[index].word.surface).isFile
         previewExisting.isEnabled = keep.isEnabled
     }
 
-    private fun selection(): Pair<Int, Int>? {
-        val from = start.text.toString().toDoubleOrNull()
-        val to = end.text.toString().toDoubleOrNull()
-        if (from == null || to == null || !from.isFinite() || !to.isFinite() ||
-            from < 0 || to > (samples.size + 1.0) / VerseAudio.SAMPLE_RATE || from >= to
-        ) {
-            toast("Enter valid start and end times within the recording.")
-            return null
+    private fun trimMaximum(spoken: Int): Int {
+        val points = checkNotNull(boundaries)
+        return ((points.end(spoken) - points.start(spoken) - 1).toLong() * 1000 / VerseAudio.SAMPLE_RATE).toInt()
+    }
+
+    private fun setTrim(atStart: Boolean, milliseconds: Int) {
+        val spoken = audioIndex(words[index])
+        val old = trims[spoken] ?: (0 to 0)
+        val limit = trimMaximum(spoken) - if (atStart) old.second else old.first
+        val value = milliseconds.coerceIn(0, limit)
+        val updated = if (atStart) value to old.second else old.first to value
+        if (updated != old) {
+            trims[spoken] = updated
+            reviewed.remove(spoken)
         }
-        val first = (from * VerseAudio.SAMPLE_RATE).roundToInt()
-        val last = (to * VerseAudio.SAMPLE_RATE).roundToInt().coerceAtMost(samples.size)
-        if (last <= first) {
-            toast("The selection is too short.")
-            return null
-        }
-        return first to last
+        showSelection()
+        refresh()
+    }
+
+    private fun invalidateSlices(changed: Set<Int>) {
+        reviewed.removeAll(changed)
+        changed.forEach { trims.remove(it) }
+    }
+
+    private fun selection(): Pair<Int, Int> {
+        val points = checkNotNull(boundaries)
+        val spoken = audioIndex(words[index])
+        val (first, last) = trims[spoken] ?: (0 to 0)
+        return points.start(spoken) + (first.toLong() * VerseAudio.SAMPLE_RATE / 1000).toInt() to
+            points.end(spoken) - (last.toLong() * VerseAudio.SAMPLE_RATE / 1000).toInt()
     }
 
     private fun previewSelection() {
         if (!rememberSelection()) return
-        val points = checkNotNull(boundaries)
-        val spoken = audioIndex(words[index])
-        previewSamples(points.start(spoken), points.end(spoken))
+        val (first, last) = selection()
+        previewSamples(first, last)
         refresh()
     }
 
     private fun rememberSelection(): Boolean {
-        val (first, last) = selection() ?: return false
-        val spokenIndex = audioIndex(words[index])
-        val points = boundaries ?: return false
-        val changed = try {
-            points.setRange(spokenIndex, first, last)
-        } catch (exception: IllegalArgumentException) {
-            toast(exception.message ?: "Invalid boundary.")
-            return false
-        }
-        reviewed.removeAll(changed)
-        return true
+        return boundaries != null
     }
 
     private fun previewSamples(first: Int, last: Int) {
@@ -581,7 +661,7 @@ internal class VerseTakeEditor(
         val snapshot = points.snapshot()
         val target = (snapshot[boundary] + direction * VerseAudio.SAMPLE_RATE / 100)
             .coerceIn(snapshot[boundary - 1] + 1, snapshot[boundary + 1] - 1)
-        reviewed.removeAll(points.move(boundary, target))
+        invalidateSlices(points.move(boundary, target))
         showSelection()
         refresh()
     }
@@ -589,9 +669,7 @@ internal class VerseTakeEditor(
     private fun saveSelection() {
         if (!rememberSelection()) return
         refresh()
-        val points = checkNotNull(boundaries)
-        val first = points.start(audioIndex(words[index]))
-        val last = points.end(audioIndex(words[index]))
+        val (first, last) = selection()
         val word = words[index].word
         fun save() {
             val candidate = repository.recordingCandidateFile(word.surface)
@@ -636,7 +714,8 @@ internal class VerseTakeEditor(
 
     private fun advance() {
         reviewed.add(audioIndex(words[index]))
-        if (index < words.lastIndex) index++
+        val next = (1..words.size).map { (index + it) % words.size }.firstOrNull { it !in reviewed }
+        if (next != null) index = next
         refresh()
         showSelection()
         scrollToSelection()
@@ -694,7 +773,6 @@ internal class VerseTakeEditor(
         refresh()
     }
 
-    private fun seconds(sample: Int) = String.format(Locale.US, "%.6f", sample.toDouble() / VerseAudio.SAMPLE_RATE)
     private fun audioIndex(word: VerseRecordingWord) =
         words.indexOfFirst { it.originalIndex == word.originalIndex }
     private fun selectCardForPreview(position: Int): Boolean {
@@ -711,9 +789,9 @@ internal class VerseTakeEditor(
         customGuide.visibility = if (guideMode == 4) View.VISIBLE else View.GONE
         if (guideMode == 4) return
         tokens.removeAllViews()
-        words.forEach { word ->
-            val spoken = audioIndex(word)
-            val isActive = word.originalIndex == words[index].originalIndex
+        (scriptWords?.invoke() ?: words).forEach { word ->
+            val spoken = words.indexOfFirst { it.originalIndex == word.originalIndex }
+            val isActive = spoken >= 0 && word.originalIndex == words[index].originalIndex
             val label = when (guideMode) {
                 1 -> word.word.mandarin
                 2 -> word.word.surface
@@ -732,13 +810,47 @@ internal class VerseTakeEditor(
                     if (isActive) primary else if (spoken in reviewed)
                         MaterialColors.layer(surface, VerseSliceWaveform.color(spoken), 0.25f) else surface
                 )
-                chipStrokeColor = ColorStateList.valueOf(if (isActive) primary else VerseSliceWaveform.color(spoken))
+                chipStrokeColor = ColorStateList.valueOf(if (isActive) primary else if (spoken >= 0) VerseSliceWaveform.color(spoken) else onSurface)
                 chipStrokeWidth = dp(if (isActive) 2 else 1).toFloat()
                 setTextColor(if (isActive) onPrimary else onSurface)
-                contentDescription = "${text}, ${if (isActive) "selected" else if (spoken in reviewed) "reviewed" else "unreviewed"}"
+                alpha = if (isUnspoken(word.word)) 0.5f else 1f
+                contentDescription = "${text}, ${if (spoken < 0) "disabled" else if (isActive) "selected" else if (spoken in reviewed) "reviewed" else "unreviewed"}"
                 setOnClickListener {
-                    val position = words.indexOfFirst { it.originalIndex == word.originalIndex }
-                    selectCard(position)
+                    if (working || recording) toast("Stop recording before opening word details.")
+                    else if (onWordDetails != null) {
+                        stopPlayback()
+                        refresh()
+                        onWordDetails.invoke(word)
+                    }
+                    else selectCard(words.indexOfFirst { it.originalIndex == word.originalIndex })
+                }
+                setOnLongClickListener {
+                    if (working || recording) return@setOnLongClickListener false
+                    val drag = WordDrag(word.originalIndex)
+                    if (android.os.Build.VERSION.SDK_INT >= 24) {
+                        startDragAndDrop(null, View.DragShadowBuilder(this), drag, 0)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        startDrag(null, View.DragShadowBuilder(this), drag, 0)
+                    }
+                }
+                setOnDragListener { _, event ->
+                    when (event.action) {
+                        DragEvent.ACTION_DRAG_STARTED -> event.localState is WordDrag && !working && !recording
+                        DragEvent.ACTION_DROP -> {
+                            val drag = event.localState as? WordDrag
+                            val order = (scriptWords?.invoke() ?: words).map { it.originalIndex }.toMutableList()
+                            val from = order.indexOf(drag?.originalIndex)
+                            val to = order.indexOf(word.originalIndex)
+                            if (from >= 0 && to >= 0 && from != to) {
+                                order.add(to, order.removeAt(from))
+                                if (onScriptReorder != null) onScriptReorder.invoke(order)
+                                else moveCard(from, to)
+                            }
+                            true
+                        }
+                        else -> true
+                    }
                 }
             }
             tokens.addView(chip)

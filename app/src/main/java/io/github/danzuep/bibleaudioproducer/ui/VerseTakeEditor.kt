@@ -816,7 +816,12 @@ internal class VerseTakeEditor(
                 alpha = if (isUnspoken(word.word)) 0.5f else 1f
                 contentDescription = "${text}, ${if (spoken < 0) "disabled" else if (isActive) "selected" else if (spoken in reviewed) "reviewed" else "unreviewed"}"
                 setOnClickListener {
-                    if (onWordDetails != null) onWordDetails.invoke(word)
+                    if (working || recording) toast("Stop recording before opening word details.")
+                    else if (onWordDetails != null) {
+                        stopPlayback()
+                        refresh()
+                        onWordDetails.invoke(word)
+                    }
                     else selectCard(words.indexOfFirst { it.originalIndex == word.originalIndex })
                 }
                 setOnLongClickListener {

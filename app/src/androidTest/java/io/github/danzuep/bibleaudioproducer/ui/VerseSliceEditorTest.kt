@@ -39,6 +39,56 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class VerseSliceEditorTest {
     @Test
+    fun draggingScriptChipsReordersRecordingCards() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val words = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first().words.filter { !it.disabled(emptySet()) }.take(3)
+        }.mapIndexed { index, word -> VerseRecordingWord(word.copy(gloss = "word$index"), index) }
+        var reordered = emptyList<Int>()
+        ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
+            lateinit var editor: VerseTakeEditor
+            lateinit var root: View
+            scenario.onActivity { activity ->
+                editor = VerseTakeEditor(activity, AudioProjectRepository(File(context.cacheDir, "script-drag-test")),
+                    words, { true }, { reordered = it }, {}, {})
+                root = editor.view()
+                activity.setContentView(root)
+            }
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            instrumentation.waitForIdleSync()
+            val from = Rect()
+            val to = Rect()
+            scenario.onActivity {
+                val chips = root.findViewById<ChipGroup>(R.id.clip_tokens)
+                assertTrue(chips.getChildAt(0).getGlobalVisibleRect(from))
+                assertTrue(chips.getChildAt(1).getGlobalVisibleRect(to))
+            }
+            val downTime = SystemClock.uptimeMillis()
+            fun touch(action: Int, x: Float, y: Float) {
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                assertTrue(instrumentation.uiAutomation.injectInputEvent(event, true))
+                event.recycle()
+            }
+            touch(MotionEvent.ACTION_DOWN, from.exactCenterX(), from.exactCenterY())
+            SystemClock.sleep(900)
+            for (step in 1..10) {
+                val fraction = step / 10f
+                touch(MotionEvent.ACTION_MOVE,
+                    from.exactCenterX() + (to.exactCenterX() - from.exactCenterX()) * fraction,
+                    from.exactCenterY() + (to.exactCenterY() - from.exactCenterY()) * fraction)
+                SystemClock.sleep(30)
+            }
+            touch(MotionEvent.ACTION_UP, to.exactCenterX(), to.exactCenterY())
+            instrumentation.waitForIdleSync()
+            scenario.onActivity {
+                assertEquals(listOf(1, 0, 2), reordered)
+                editor.dispose()
+            }
+        }
+    }
+
+    @Test
     fun waveformStartsAtOneSecondAndOnlySelectedBoundariesDrag() {
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->

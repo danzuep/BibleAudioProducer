@@ -514,12 +514,7 @@ internal class VerseTakeEditor(
             holder.card.setOnLongClickListener {
                 if (!ready || !rememberSelection()) return@setOnLongClickListener false
                 val drag = WordDrag(word.originalIndex)
-                if (android.os.Build.VERSION.SDK_INT >= 24) {
-                    holder.card.startDragAndDrop(null, View.DragShadowBuilder(holder.card), drag, 0)
-                } else {
-                    @Suppress("DEPRECATION")
-                    holder.card.startDrag(null, View.DragShadowBuilder(holder.card), drag, 0)
-                }
+                androidx.core.view.ViewCompat.startDragAndDrop(holder.card, null, View.DragShadowBuilder(holder.card), drag, 0)
             }
             holder.assign.isEnabled = ready
             holder.assign.contentDescription = "Save ${targetLabel(word)} clip and next"
@@ -827,12 +822,7 @@ internal class VerseTakeEditor(
                 setOnLongClickListener {
                     if (working || recording) return@setOnLongClickListener false
                     val drag = WordDrag(word.originalIndex)
-                    if (android.os.Build.VERSION.SDK_INT >= 24) {
-                        startDragAndDrop(null, View.DragShadowBuilder(this), drag, 0)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        startDrag(null, View.DragShadowBuilder(this), drag, 0)
-                    }
+                    androidx.core.view.ViewCompat.startDragAndDrop(this, null, View.DragShadowBuilder(this), drag, 0)
                 }
                 setOnDragListener { _, event ->
                     when (event.action) {

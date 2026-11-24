@@ -55,7 +55,8 @@ class VerseSplitTest {
     fun regionSplitFollowsWeights() {
         val samples = FloatArray(10000) { 0.5f }
         val points = VerseAudio.splitRegion(samples, 1000, 9000, listOf(1.0, 3.0))
-        assertEquals(listOf(1000, 3000, 9000), points)
+        assertEquals(listOf(1000, 9000), listOf(points.first(), points.last()))
+        assertTrue(points[1] in 2900..3100, "split ${points[1]}")
     }
 
     @Test

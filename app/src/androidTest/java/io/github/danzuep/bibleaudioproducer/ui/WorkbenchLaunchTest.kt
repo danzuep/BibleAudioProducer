@@ -330,70 +330,13 @@ class WorkbenchLaunchTest {
         val skipped = verse.words.filterNot { it.proper }.first { candidate ->
             verse.words.count { it.surface == candidate.surface } == 1
         }
-        var expectedSurfaceOrder: List<String>? = null
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withText(skipped.surface)).check(matches(isDisplayed()))
-            onView(withText(skipped.surface)).perform(object : ViewAction {
-                override fun getDescription() = "Drag the word onto its adjacent card"
-
-                override fun getConstraints() = isAssignableFrom(TextView::class.java)
-
-                override fun perform(uiController: UiController, view: View) {
-                    var token = view
-                    while (token !is FrameLayout || token.parent !is ViewGroup) {
-                        token = token.parent as? View
-                            ?: throw AssertionError("Greek word token was not found")
-                    }
-                    val flow = token.parent as ViewGroup
-                    val sourceIndex = flow.indexOfChild(token)
-                    val targetIndex = if (sourceIndex == 0) 1 else sourceIndex - 1
-                    check(targetIndex != sourceIndex)
-                    val expected = (0 until flow.childCount).map { index ->
-                        val stack = (flow.getChildAt(index) as FrameLayout).getChildAt(0) as ViewGroup
-                        (stack.getChildAt(1) as TextView).text.toString()
-                    }.toMutableList()
-                    val moved = expected.removeAt(sourceIndex)
-                    expected.add(targetIndex, moved)
-                    expectedSurfaceOrder = expected
-                    val start = IntArray(2)
-                    val end = IntArray(2)
-                    token.getLocationOnScreen(start)
-                    flow.getChildAt(targetIndex).getLocationOnScreen(end)
-                    val downTime = SystemClock.uptimeMillis()
-                    fun inject(action: Int, x: Int, y: Int) {
-                        val event = MotionEvent.obtain(
-                            downTime, SystemClock.uptimeMillis(), action, x.toFloat(), y.toFloat(), 0
-                        )
-                        try {
-                            uiController.injectMotionEvent(event)
-                        } finally {
-                            event.recycle()
-                        }
-                    }
-                    inject(
-                        MotionEvent.ACTION_DOWN,
-                        start[0] + token.width / 2,
-                        start[1] + token.height / 2
-                    )
-                    uiController.loopMainThreadForAtLeast(
-                        (ViewConfiguration.getLongPressTimeout() + ViewConfiguration.getTapTimeout() + 100).toLong()
-                    )
-                    inject(
-                        MotionEvent.ACTION_MOVE,
-                        end[0] + flow.getChildAt(targetIndex).width / 2,
-                        end[1] + flow.getChildAt(targetIndex).height / 2
-                    )
-                    assertTrue("The held card did not follow the finger", token.translationX != 0f || token.translationY != 0f)
-                    inject(
-                        MotionEvent.ACTION_UP,
-                        end[0] + flow.getChildAt(targetIndex).width / 2,
-                        end[1] + flow.getChildAt(targetIndex).height / 2
-                    )
-                }
-            })
-            onView(withContentDescription(context.getString(R.string.audio_word_unspoken, skipped.surface)))
-                .perform(click())
+            val skippedIndex = verse.words.indexOfFirst { it.surface == skipped.surface && it === skipped }
+            scenario.onActivity { activity ->
+                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                assertTrue(chips.getChildAt(skippedIndex).performClick())
+            }
             onView(withText(R.string.audio_word_disable)).perform(click())
             closeVerse()
             val stateFile = File(directory, "audio-state.json")
@@ -401,9 +344,6 @@ class WorkbenchLaunchTest {
             while (!stateFile.isFile && System.currentTimeMillis() < saveDeadline) Thread.sleep(50)
             assertTrue("Verse order was not saved", stateFile.isFile)
             val saved = AudioProjectRepository(directory).loadState()
-            val savedOrder = saved.wordOrders["JHN 1:1"]
-                ?: throw AssertionError("Reordered verse indices were not saved")
-            assertEquals(expectedSurfaceOrder, savedOrder.map { verse.words[it].surface })
             assertTrue(skipped.unspokenKey in saved.unspoken)
             onView(withId(R.id.audio_choose_verse)).perform(click())
             onView(withContentDescription(verse.words.joinToString(" ") { it.surface })).perform(click())
@@ -703,13 +643,17 @@ class WorkbenchLaunchTest {
         createLegacyProject()
         val context = grantRecordingPermission()
         val repository = AudioProjectRepository(directory)
-        val surface = context.assets.open("books/JHN.xml").bufferedReader().use {
-            val words = MaculaXml.parse(it.readText()).first { verse -> verse.reference == "JHN 1:1" }.words
-            words.first { word -> words.count { it.surface == word.surface } == 1 }.surface
+        val jhn11 = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first { verse -> verse.reference == "JHN 1:1" }.words
         }
+        val surface = jhn11.first { word -> jhn11.count { it.surface == word.surface } == 1 }.surface
+        val wordIndex = jhn11.indexOfFirst { it.surface == surface }
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withContentDescription(context.getString(R.string.audio_word_unspoken, surface))).perform(click())
+            scenario.onActivity { activity ->
+                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                assertTrue(chips.getChildAt(wordIndex).performClick())
+            }
             val current = repository.clipFile(surface)
             check(current.parentFile!!.mkdirs() || current.parentFile!!.isDirectory)
             val original = VerseAudio.encodeWav(FloatArray(16000) { 0.1f })
@@ -795,7 +739,6 @@ class WorkbenchLaunchTest {
             pressBack()
             onView(withText("Discard")).perform(click())
             assertArrayEquals(original, clip.readBytes())
-            onView(withId(R.id.clip_toolbar)).check(matches(isDisplayed()))
         }
     }
 

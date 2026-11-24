@@ -20,18 +20,19 @@ icon to set the recording language, import plans or audio, export archives, or m
 Imports in a different language are rejected to prevent mixing projects. Plans and
 recordings remain in private storage; export them before uninstalling.
 
-In a verse, tap the record button beside playback to open the recording editor, then
-select a word-order mode or drag individual script words. Record the enabled words' translations in the
+Opening a verse shows the recording editor (use its overflow menu to save the verse audio). Select a word-order mode or drag individual script words. Record the enabled words' translations in the
 displayed card order; omit disabled words. Choose an English, Chinese, original Greek,
 transliteration, or custom recording guide. The app suggests boundaries at quiet points in
 recording order and shows them on a chronological waveform above the card deck. A live
 microphone waveform appears during recording. Tap a slice or card to select it;
 drag its waveform handles or use the 10 ms nudge buttons. The nudge
 buttons move the selected slice's end boundary
-(or its start for the last slice). Trim sliders remove milliseconds from the selected
-clip's start and end without moving shared boundaries. The app suggests skipping leading
-silence while keeping the original take; adjust the first start handle to restore audio if needed.
-The recording end is fixed. The waveform initially shows one second around the first word;
+(or its start for the last slice). The first and last cards, shown as "·", are silence: drag
+their boundaries to set the start and end trim. The app skips leading silence while keeping the
+original take. Use **Insert ·** to add a separator before the selected card so that mistakes
+can be cut out. Dragging a boundary right pushes later boundaries and recomputes the likely
+word positions after it; dragging left stops at the previous boundary.
+The waveform initially shows one second around the first word;
 zoom follows the selected slice. Adjacent slices share their boundary: moving it
 changes both clips and requires reviewing both again. Cards always follow audio order.
 Drag a card's handle to change its position, or drop the card onto a waveform segment.

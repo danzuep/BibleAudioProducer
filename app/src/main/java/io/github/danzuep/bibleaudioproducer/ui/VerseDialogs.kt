@@ -2,7 +2,6 @@ package io.github.danzuep.bibleaudioproducer.ui
 
 import android.content.res.ColorStateList
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
@@ -260,59 +259,12 @@ internal class VerseDialogs(
         val unspoken = actions.state.unspoken.toMutableSet()
         var changed = !hasSavedOrder && defaultMode != null
         var selectedMode = if (!hasSavedOrder) defaultMode else null
-        val recordedStates = mutableMapOf<String, Boolean>()
-        lateinit var renderWords: () -> Unit
+        val initial = VerseWorkflow.recordingWords(verse.words, order, unspoken)
+        if (initial.isEmpty()) {
+            android.widget.Toast.makeText(activity, R.string.audio_verse_no_words, android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
 
-        val root = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-        }
-        val header = LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            orientation = LinearLayout.HORIZONTAL
-        }
-        val reference = TextView(activity).apply {
-            text = verse.reference
-            textSize = 20f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        }
-        val play = roundButton(R.color.workbench_primary).apply {
-            setOnClickListener { actions.playVerse(verse) }
-        }
-        val addRecording = roundButton(R.color.workbench_record).apply {
-            id = R.id.audio_verse_record
-            setText(R.string.audio_record_symbol)
-            contentDescription = activity.getString(R.string.audio_record_verse_words)
-        }
-        val more = Button(activity).apply {
-            id = R.id.audio_verse_more
-            text = "⋮"
-            contentDescription = activity.getString(R.string.audio_download_verse)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-            setOnClickListener { showVerseActions(verse) }
-        }
-        val close = Button(activity).apply {
-            id = R.id.audio_verse_close
-            text = "←"
-            contentDescription = activity.getString(R.string.audio_back)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
-        }
-        header.addView(close, LinearLayout.LayoutParams(dp(48), dp(56)))
-        header.addView(reference, LinearLayout.LayoutParams(0, dp(56), 1f))
-        header.addView(play)
-        header.addView(addRecording)
-        header.addView(more, LinearLayout.LayoutParams(dp(48), dp(56)))
-        root.addView(header)
-        val hint = TextView(activity).apply {
-            text = activity.getString(R.string.audio_verse_drag_hint)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setPadding(0, dp(4), 0, dp(8))
-        }
-        root.addView(hint)
-        val controls = LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            orientation = LinearLayout.HORIZONTAL
-        }
         val modes = WordOrderMode.values()
         val modeLabels = listOf(
             R.string.audio_word_order_greek, R.string.audio_word_order_english,
@@ -339,7 +291,6 @@ internal class VerseDialogs(
                     if (next != order) {
                         order = next.toMutableList()
                         takeEditor?.syncWords(VerseWorkflow.recordingWords(verse.words, order, unspoken))
-                        renderWords()
                     }
                     changed = true
                     if (verse.reference == "JHN 3:16") {
@@ -350,253 +301,57 @@ internal class VerseDialogs(
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
         }
-        lateinit var flow: VerseFlowLayout
-        lateinit var scroll: ScrollView
-        val editorContainer = FrameLayout(activity).apply { visibility = View.GONE }
-        fun showVersePage() {
-            editorContainer.removeAllViews()
-            editorContainer.visibility = View.GONE
-            header.visibility = View.VISIBLE
-            scroll.visibility = View.VISIBLE
-            root.setPadding(dp(16), dp(12), dp(16), dp(12))
+        fun markCustomOrder() {
+            selecting = true
+            orderMode.setSelection(WordOrderMode.CUSTOM.ordinal)
+            selecting = false
+            selectedMode = WordOrderMode.CUSTOM
+            changed = true
         }
-        addRecording.setOnClickListener {
-            val cards = VerseWorkflow.recordingWords(verse.words, order, unspoken)
-            if (cards.isEmpty()) return@setOnClickListener
-            actions.stopPlayback()
-            lateinit var editor: VerseTakeEditor
-            fun closeEditor() {
-                if (editor.close()) {
-                    takeEditor = null
-                    showVersePage()
-                    addRecording.isEnabled = true
-                    addRecording.visibility = View.VISIBLE
-                    flow.visibility = View.VISIBLE
-                    controls.visibility = View.VISIBLE
-                    hint.visibility = View.VISIBLE
-                    renderWords()
-                    refreshControls()
-                }
-            }
-            editor = VerseTakeEditor(activity, repository, cards,
-                actions::hasRecordingPermission, { originalOrder ->
-                    val reordered = originalOrder.iterator()
-                    order = order.map {
-                        if (verse.words[it].disabled(unspoken)) it else reordered.next()
-                    }.toMutableList()
-                    selecting = true
-                    orderMode.setSelection(WordOrderMode.CUSTOM.ordinal)
-                    selecting = false
-                    selectedMode = WordOrderMode.CUSTOM
-                    changed = true
-                }, { closeEditor() }, {
-                    closeEditor()
-                    changed = false
-                    back()
-                    actions.completeVerse(verse, order.toList(), unspoken.toSet())
-                }, verse.reference, orderMode,
-                { order.map { VerseRecordingWord(verse.words[it], it) } },
-                { word -> word.disabled(unspoken) },
-                { scriptOrder ->
-                    order = scriptOrder.toMutableList()
-                    selecting = true
-                    orderMode.setSelection(WordOrderMode.CUSTOM.ordinal)
-                    selecting = false
-                    selectedMode = WordOrderMode.CUSTOM
-                    changed = true
-                    takeEditor?.syncWords(VerseWorkflow.recordingWords(verse.words, order, unspoken))
-                },
-                { entry ->
-                    showWordDetails(entry.word, entry.word.disabled(unspoken)) { disabled ->
-                        if (takeEditor?.canChangeSpoken() != true) {
-                            android.widget.Toast.makeText(activity, "Discard the take before changing spoken words.", android.widget.Toast.LENGTH_LONG).show()
+        actions.stopPlayback()
+        val editor = VerseTakeEditor(activity, repository, initial,
+            actions::hasRecordingPermission, { originalOrder ->
+                val reordered = originalOrder.iterator()
+                order = order.map {
+                    if (verse.words[it].disabled(unspoken)) it else reordered.next()
+                }.toMutableList()
+                markCustomOrder()
+            }, { back() }, {
+                changed = false
+                back()
+                actions.completeVerse(verse, order.toList(), unspoken.toSet())
+            }, verse.reference, orderMode,
+            { order.map { VerseRecordingWord(verse.words[it], it) } },
+            { word -> word.disabled(unspoken) },
+            { scriptOrder ->
+                order = scriptOrder.toMutableList()
+                markCustomOrder()
+                takeEditor?.syncWords(VerseWorkflow.recordingWords(verse.words, order, unspoken))
+            },
+            { entry ->
+                showWordDetails(entry.word, entry.word.disabled(unspoken)) { disabled ->
+                    if (takeEditor?.canChangeSpoken() != true) {
+                        android.widget.Toast.makeText(activity, "Discard the take before changing spoken words.", android.widget.Toast.LENGTH_LONG).show()
+                    } else {
+                        val updated = unspoken.toMutableSet()
+                        entry.word.withDisabled(updated, disabled)
+                        val cards = VerseWorkflow.recordingWords(verse.words, order, updated)
+                        if (cards.isEmpty()) {
+                            android.widget.Toast.makeText(activity, "Keep at least one word enabled.", android.widget.Toast.LENGTH_LONG).show()
                         } else {
-                            val updated = unspoken.toMutableSet()
-                            entry.word.withDisabled(updated, disabled)
-                            val cards = VerseWorkflow.recordingWords(verse.words, order, updated)
-                            if (cards.isEmpty()) {
-                                android.widget.Toast.makeText(activity, "Keep at least one word enabled.", android.widget.Toast.LENGTH_LONG).show()
-                            } else {
-                                unspoken.clear()
-                                unspoken.addAll(updated)
-                                changed = true
-                                takeEditor?.syncWords(cards)
-                            }
+                            unspoken.clear()
+                            unspoken.addAll(updated)
+                            changed = true
+                            takeEditor?.syncWords(cards)
                         }
                     }
-                })
-            takeEditor = editor
-            header.visibility = View.GONE
-            scroll.visibility = View.GONE
-            root.setPadding(0, 0, 0, 0)
-            editorContainer.visibility = View.VISIBLE
-            addRecording.isEnabled = false
-            addRecording.visibility = View.GONE
-            flow.visibility = View.GONE
-            controls.visibility = View.GONE
-            hint.visibility = View.GONE
-            editorContainer.addView(editor.view(), FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-            ))
-            scroll.post { scroll.scrollTo(0, 0) }
-        }
-
-        renderWords = {
-            val oldScroll = scroll.scrollY
-            flow.removeAllViews()
-            order.forEachIndexed { orderIndex, wordIndex ->
-                val word = verse.words[wordIndex]
-                val recorded = repository.clipFile(word.surface).isFile
-                recordedStates[word.surface] = recorded
-                val token = wordToken(
-                    word,
-                    word.disabled(unspoken),
-                    recorded,
-                    28f
-                )
-                token.setOnClickListener {
-                    if (takeEditor != null) return@setOnClickListener
-                    showWordDetails(word, word.disabled(unspoken)) { disabled ->
-                        word.withDisabled(unspoken, disabled)
-                        changed = true
-                        renderWords()
-                    }
                 }
-                val drag = object : View.OnTouchListener {
-                    private var downX = 0f
-                    private var downY = 0f
-                    private var touching = false
-                    private var dragging = false
-
-                    fun lift(): Boolean {
-                        if (!touching || takeEditor != null) return false
-                        dragging = true
-                        token.translationZ = dp(8).toFloat()
-                        token.alpha = 0.85f
-                        flow.requestDisallowInterceptTouchEvent(true)
-                        return true
-                    }
-
-                    override fun onTouch(view: View, event: MotionEvent): Boolean {
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> {
-                                downX = event.rawX
-                                downY = event.rawY
-                                touching = true
-                            }
-                            MotionEvent.ACTION_MOVE -> if (dragging) {
-                                view.translationX = event.rawX - downX
-                                view.translationY = event.rawY - downY
-                                return true
-                            }
-                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                touching = false
-                                if (!dragging) return false
-                                dragging = false
-                                view.isPressed = false
-                                view.alpha = 1f
-                                view.translationX = 0f
-                                view.translationY = 0f
-                                view.translationZ = 0f
-                                flow.requestDisallowInterceptTouchEvent(false)
-                                if (event.actionMasked == MotionEvent.ACTION_UP) {
-                                    val bounds = android.graphics.Rect()
-                                    scroll.getGlobalVisibleRect(bounds)
-                                    val location = IntArray(2)
-                                    val windowLocation = IntArray(2)
-                                    scroll.getLocationOnScreen(location)
-                                    scroll.getLocationInWindow(windowLocation)
-                                    bounds.offset(location[0] - windowLocation[0], location[1] - windowLocation[1])
-                                    val target = if (bounds.contains(event.rawX.toInt(), event.rawY.toInt())) {
-                                        flow.indexAt(event.rawX, event.rawY)
-                                    } else -1
-                                    if (target >= 0 && target != orderIndex) {
-                                        order.add(target, order.removeAt(orderIndex))
-                                        selecting = true
-                                        orderMode.setSelection(WordOrderMode.CUSTOM.ordinal)
-                                        selecting = false
-                                        selectedMode = WordOrderMode.CUSTOM
-                                        changed = true
-                                        renderWords()
-                                    }
-                                }
-                                return true
-                            }
-                        }
-                        return false
-                    }
-                }
-                token.setOnTouchListener(drag)
-                token.setOnLongClickListener { drag.lift() }
-                flow.addView(token)
-            }
-            scroll.post { scroll.scrollTo(0, oldScroll) }
-        }
-
-        flow = VerseFlowLayout(activity)
-        val verseContent = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(flow)
-        }
-        scroll = ScrollView(activity).apply {
-            setFillViewport(true)
-            isVerticalScrollBarEnabled = true
-            isScrollbarFadingEnabled = false
-            addView(verseContent, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
-        }
-        root.addView(scroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
-        root.addView(editorContainer, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
-        renderWords()
-        val refresh = {
-            val recordingStateChanged = order.map { verse.words[it].surface }.distinct().any { surface ->
-                val recorded = repository.clipFile(surface).isFile
-                recordedStates.put(surface, recorded)?.let { it != recorded } == true
-            }
-            if (recordingStateChanged) renderWords()
-            val recorded = VerseWorkflow.spokenWords(
-                verse.words, actions.state.rules, actions.state.seedOrders[verse.reference], unspoken, order,
-                verse.reference in actions.state.fullVerseReferences
-            ).any { repository.playableClip(it) != null }
-            val playable = actions.isPlayingVerse(verse) || recorded || !actions.speechFailed
-            play.isEnabled = playable
-            play.setText(if (actions.isPlayingVerse(verse)) R.string.audio_stop_symbol else R.string.audio_play_symbol)
-            play.contentDescription = if (actions.isPlayingVerse(verse)) {
-                activity.getString(R.string.audio_stop_word, verse.reference)
-            } else {
-                activity.getString(R.string.audio_play_verse)
-            }
-            play.alpha = if (playable) 1f else 0.45f
-        }
-        close.setOnClickListener { back() }
-        push(root, refresh) {
-            val editor = takeEditor
-            if (editor != null) {
-                if (editor.close()) {
-                    takeEditor = null
-                    showVersePage()
-                    addRecording.isEnabled = true
-                    addRecording.visibility = View.VISIBLE
-                    flow.visibility = View.VISIBLE
-                    controls.visibility = View.VISIBLE
-                    hint.visibility = View.VISIBLE
-                    renderWords()
-                    refreshControls()
-                }
-                return@push false
-            }
-            if (changed) {
-                actions.saveVerseState(
-                    verse.reference,
-                    if (changed) order.toList() else actions.state.wordOrders[verse.reference],
-                    unspoken
-                )
-            }
+            }, { showVerseActions(verse) })
+        takeEditor = editor
+        push(editor.view(), { editor.refreshExternal() }) {
+            if (!editor.close()) return@push false
+            takeEditor = null
+            if (changed) actions.saveVerseState(verse.reference, order.toList(), unspoken)
             actions.stopPlayback()
             true
         }
@@ -707,25 +462,6 @@ internal class VerseDialogs(
         }
     }
 
-    private fun wordToken(word: VerseWord, unspoken: Boolean, recorded: Boolean, fontSize: Float): View {
-        val token = FrameLayout(activity).apply {
-            setPadding(dp(4), dp(8), dp(4), dp(8))
-            isClickable = true
-            isLongClickable = true
-            contentDescription = activity.getString(
-                if (unspoken) R.string.audio_word_spoken else R.string.audio_word_unspoken,
-                word.surface
-            )
-        }
-        val greek = greekLabel(word, fontSize).apply { setTextColor(wordColor(unspoken, recorded)) }
-        token.addView(wordStack(word, greek), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.CENTER
-        ))
-        return token
-    }
-
     private fun greekLabel(word: VerseWord, fontSize: Float) = TextView(activity).apply {
         text = word.surface
         gravity = Gravity.CENTER
@@ -824,25 +560,6 @@ private class VerseFlowLayout(
             x += childWidth
             rowHeight = max(rowHeight, childHeight)
         }
-    }
-
-    fun indexAt(rawX: Float, rawY: Float): Int {
-        val location = IntArray(2)
-        getLocationOnScreen(location)
-        val x = rawX - location[0]
-        val y = rawY - location[1]
-        var closestIndex = -1
-        var closestDistance = Float.POSITIVE_INFINITY
-        for (index in 0 until childCount) {
-            val child = getChildAt(index)
-            if (y < child.top || y > child.bottom) continue
-            val distance = max(child.left - x, x - child.right).coerceAtLeast(0f)
-            if (distance < closestDistance) {
-                closestIndex = index
-                closestDistance = distance
-            }
-        }
-        return closestIndex
     }
 
     override fun generateDefaultLayoutParams(): LayoutParams =

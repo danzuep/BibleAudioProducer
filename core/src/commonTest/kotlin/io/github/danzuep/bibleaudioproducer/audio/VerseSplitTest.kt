@@ -24,17 +24,38 @@ class VerseSplitTest {
     }
 
     @Test
-    fun leadingSilenceIsSkippedWithoutLosingTheOriginalAudio() {
-        val samples = FloatArray(24000) { if (it >= 16000) 0.4f else 0f }
+    fun leadingAndTrailingSilenceBecomeTheirOwnSegments() {
+        val samples = FloatArray(32000) { if (it in 16000 until 24000) 0.4f else 0f }
         val suggested = VerseAudio.suggestBoundaries(samples, 2)
-        assertEquals(15360, suggested.first())
-        assertEquals(24000, suggested.last())
-        val boundaries = VerseBoundaries(suggested)
-        assertEquals(setOf(0), boundaries.move(0, 0))
-        assertEquals(setOf(0), boundaries.setRange(0, 12000, boundaries.end(0)))
+        assertEquals(5, suggested.size)
+        assertEquals(0, suggested.first())
+        assertEquals(15360, suggested[1])
+        assertTrue(suggested[3] in 24000..26000)
+        assertEquals(32000, suggested.last())
+        assertTrue(suggested.zipWithNext().all { (a, b) -> a < b })
         assertEquals(0f, samples[0])
         assertEquals(0.4f, samples[16000])
-        assertEquals(0, VerseAudio.suggestBoundaries(FloatArray(1000), 2).first())
+        val silent = VerseAudio.suggestBoundaries(FloatArray(1000), 2)
+        assertEquals(listOf(0, 1), silent.take(2))
+        assertEquals(listOf(999, 1000), silent.takeLast(2))
+    }
+
+    @Test
+    fun startDetectionIgnoresClicksAndBackgroundNoise() {
+        val samples = FloatArray(48000) { if (it % 2 == 0) 0.01f else -0.01f }
+        for (i in 4000 until 4100) samples[i] = if (i % 2 == 0) 0.9f else -0.9f
+        for (i in 20000 until 40000) samples[i] = if (i % 40 < 20) 0.3f else -0.3f
+        val (start, end) = checkNotNull(VerseAudio.speechRegion(samples))
+        assertTrue(start in 18000..19400, "start $start")
+        assertTrue(end in 40000..42000, "end $end")
+        assertEquals(null, VerseAudio.speechRegion(FloatArray(500)))
+    }
+
+    @Test
+    fun regionSplitFollowsWeights() {
+        val samples = FloatArray(10000) { 0.5f }
+        val points = VerseAudio.splitRegion(samples, 1000, 9000, listOf(1.0, 3.0))
+        assertEquals(listOf(1000, 3000, 9000), points)
     }
 
     @Test
@@ -43,8 +64,22 @@ class VerseSplitTest {
         for (i in 15840 until 16000) samples[i] = 0f
         for (i in 31840 until 32000) samples[i] = 0f
         val boundaries = VerseAudio.suggestBoundaries(samples, 3)
-        assertEquals(listOf(0, 15840, 31840, 48000), boundaries)
-        assertTrue(boundaries.zipWithNext().all { (a, b) -> a < b })
+        assertEquals(listOf(0, 1, 15840, 31840, 47999, 48000), boundaries)
+    }
+
+    @Test
+    fun splitMergeAndReplaceKeepBoundariesOrdered() {
+        val boundaries = VerseBoundaries(listOf(0, 100, 200, 300, 400))
+        boundaries.split(1, 150)
+        assertEquals(listOf(0, 100, 150, 200, 300, 400), boundaries.snapshot())
+        assertFailsWith<IllegalArgumentException> { boundaries.split(1, 150) }
+        assertEquals(setOf(2, 3, 4), boundaries.replaceFrom(3, listOf(250, 350)))
+        assertEquals(listOf(0, 100, 150, 250, 350, 400), boundaries.snapshot())
+        assertFailsWith<IllegalArgumentException> { boundaries.replaceFrom(3, listOf(250, 400)) }
+        assertFailsWith<IllegalArgumentException> { boundaries.replaceFrom(2, listOf(90)) }
+        boundaries.merge(2)
+        assertEquals(listOf(0, 100, 250, 350, 400), boundaries.snapshot())
+        assertFailsWith<IllegalArgumentException> { boundaries.merge(0) }
     }
 
     @Test

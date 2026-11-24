@@ -44,4 +44,38 @@ class VerseBoundaries(initial: List<Int>) {
         points[boundary] = sample
         return if (boundary == 0) setOf(0) else setOf(boundary - 1, boundary)
     }
+
+    /** Split a segment in two at [sample]; later segment indexes shift up by one. */
+    fun split(index: Int, sample: Int) {
+        require(index in 0 until count && sample > points[index] && sample < points[index + 1]) {
+            "A split must fall inside its segment."
+        }
+        points.add(index + 1, sample)
+    }
+
+    /** Remove the boundary between segments [boundary] - 1 and [boundary]; later indexes shift down by one. */
+    fun merge(boundary: Int) {
+        require(boundary in 1 until points.lastIndex) { "Only an inner boundary can be merged." }
+        points.removeAt(boundary)
+    }
+
+    /** Replace consecutive inner boundaries starting at [boundary], keeping their number. */
+    fun replaceFrom(boundary: Int, replacement: List<Int>): Set<Int> {
+        val after = boundary + replacement.size
+        require(boundary in 1 until points.lastIndex && replacement.isNotEmpty() && after < points.size &&
+            replacement.first() > points[boundary - 1] && replacement.last() < points[after] &&
+            replacement.zipWithNext().all { (a, b) -> a < b }) {
+            "The replacement boundaries must stay in order between their neighbors."
+        }
+        val changed = mutableSetOf<Int>()
+        replacement.forEachIndexed { offset, sample ->
+            val point = boundary + offset
+            if (points[point] != sample) {
+                points[point] = sample
+                changed.add(point - 1)
+                changed.add(point)
+            }
+        }
+        return changed
+    }
 }

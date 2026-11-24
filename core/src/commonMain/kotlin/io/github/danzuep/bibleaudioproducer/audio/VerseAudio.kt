@@ -11,45 +11,95 @@ import kotlin.math.sqrt
 object VerseAudio {
     const val SAMPLE_RATE = 16000
 
-    /** Suggest contiguous word boundaries near quiet points; the suggestions always require review. */
-    fun suggestBoundaries(samples: FloatArray, wordCount: Int): List<Int> {
-        require(wordCount > 0 && samples.size >= wordCount) { "Recording is too short to split." }
+    private const val FRAME = SAMPLE_RATE / 100
+    private const val ONSET_FRAMES = 4
+    private const val LEAD_IN = SAMPLE_RATE / 25
+    private const val TAIL_OUT = SAMPLE_RATE / 12
+
+    private fun frameLevels(samples: FloatArray): DoubleArray = DoubleArray((samples.size + FRAME - 1) / FRAME) { frame ->
+        val start = frame * FRAME
+        val end = minOf(start + FRAME, samples.size)
+        var sum = 0.0
+        for (i in start until end) sum += samples[i].toDouble() * samples[i]
+        sqrt(sum / (end - start))
+    }
+
+    /**
+     * Find where speech begins and ends. Short clicks (such as a button tap) and steady background noise
+     * are ignored: speech must stay above the noise floor for several consecutive frames, and the edges
+     * are widened to include soft consonants. Returns null when the recording is silent.
+     */
+    fun speechRegion(samples: FloatArray): Pair<Int, Int>? {
+        val levels = frameLevels(samples)
+        val peak = levels.maxOrNull() ?: 0.0
+        if (peak == 0.0) return null
+        val floor = levels.sorted()[levels.size / 5]
+        val noise = if (floor < peak * 0.25) floor * 3 else 0.0
+        val threshold = maxOf(peak * 0.05, noise)
+        val soft = threshold * 0.4
+        val needed = minOf(ONSET_FRAMES, levels.size)
+        fun loud(frame: Int) = (0 until needed).all { levels[frame + it] >= threshold }
+        val first = (0..levels.size - needed).firstOrNull(::loud) ?: return null
+        val last = (levels.size - needed downTo first).first(::loud) + needed - 1
+        var onset = first
+        while (onset > 0 && first - onset < 10 && levels[onset - 1] >= soft) onset--
+        var offset = last
+        while (offset < levels.lastIndex && offset - last < 15 && levels[offset + 1] >= soft) offset++
+        return maxOf(0, onset * FRAME - LEAD_IN) to minOf(samples.size, (offset + 1) * FRAME + TAIL_OUT)
+    }
+
+    /**
+     * Suggest contiguous boundaries for [weights].size cards, in chronological order. The result starts
+     * with 0 and ends with the sample count; the first and last segments hold the silence around the speech
+     * and the segments between them follow the weights, which only express how long each card is likely to be.
+     * The suggestions always require review.
+     */
+    fun suggestBoundaries(samples: FloatArray, weights: List<Double>): List<Int> {
+        val count = weights.size
+        require(count > 0 && samples.size >= count + 2) { "Recording is too short to split." }
         require(samples.all { it.isFinite() }) { "The recording contains invalid audio samples." }
-        val window = (SAMPLE_RATE / 100).coerceAtMost(samples.size)
-        val energies = DoubleArray((samples.size + window - 1) / window) { frame ->
-            val start = frame * window
-            val end = minOf(start + window, samples.size)
-            (start until end).sumOf { samples[it].toDouble() * samples[it] } / (end - start)
-        }
-        val peakEnergy = energies.maxOrNull() ?: 0.0
-        val firstAudible = if (peakEnergy == 0.0) 0 else
-            energies.indexOfFirst { it >= peakEnergy * 0.0025 }.coerceAtLeast(0) * window
-        val start = (firstAudible - SAMPLE_RATE / 25).coerceIn(0, samples.size - wordCount)
-        val boundaries = mutableListOf(start)
-        for (i in 1 until wordCount) {
-            val target = start + (samples.size - start).toLong() * i / wordCount
-            val radius = (samples.size - start) / wordCount / 3
-            val minimum = boundaries.last() + 1
-            val maximum = samples.size - (wordCount - i)
+        val (found, foundEnd) = speechRegion(samples) ?: (0 to samples.size)
+        val start = found.coerceIn(1, samples.size - 1 - count)
+        val end = foundEnd.coerceIn(start + count, samples.size - 1)
+        return listOf(0) + splitRegion(samples, start, end, weights) + samples.size
+    }
+
+    fun suggestBoundaries(samples: FloatArray, wordCount: Int): List<Int> =
+        suggestBoundaries(samples, List(wordCount) { 1.0 })
+
+    /** Split [start, end) into one segment per weight, preferring quiet points; returns weights.size + 1 points. */
+    fun splitRegion(samples: FloatArray, start: Int, end: Int, weights: List<Double>): List<Int> {
+        val count = weights.size
+        require(count > 0 && start >= 0 && end <= samples.size && end - start >= count) { "Region is too short to split." }
+        require(weights.all { it > 0.0 }) { "Weights must be positive." }
+        val levels = frameLevels(samples)
+        val total = weights.sum()
+        val points = mutableListOf(start)
+        var cumulative = 0.0
+        for (i in 1 until count) {
+            cumulative += weights[i - 1]
+            val target = start + ((end - start) * cumulative / total).toLong()
+            val radius = ((end - start) * minOf(weights[i - 1], weights[i]) / total / 3).toInt()
+            val minimum = points.last() + 1
+            val maximum = end - (count - i)
             val first = maxOf(minimum, (target - radius).toInt())
             val last = minOf(maximum, (target + radius).toInt())
             var best = target.toInt().coerceIn(minimum, maximum)
             var bestScore = Double.POSITIVE_INFINITY
-            val startFrame = (first + window - 1) / window
-            val endFrame = last / window
-            for (frame in startFrame..endFrame) {
-                if (frame !in energies.indices) continue
-                val distance = kotlin.math.abs(frame.toLong() * window - target).toDouble() / radius.coerceAtLeast(1)
-                val score = energies[frame] + distance * 1e-8
+            for (frame in (first + FRAME - 1) / FRAME..last / FRAME) {
+                val point = frame * FRAME
+                if (frame !in levels.indices || point !in minimum..maximum) continue
+                val distance = abs(point - target).toDouble() / radius.coerceAtLeast(1)
+                val score = levels[frame] * levels[frame] + distance * 1e-8
                 if (score < bestScore) {
                     bestScore = score
-                    best = frame * window
+                    best = point
                 }
             }
-            boundaries.add(best)
+            points.add(best)
         }
-        boundaries.add(samples.size)
-        return boundaries
+        points.add(end)
+        return points
     }
 
     /** Copy a non-destructive selection with short fades to reduce clicks. */

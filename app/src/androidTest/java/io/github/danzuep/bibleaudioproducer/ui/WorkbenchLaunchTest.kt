@@ -24,6 +24,7 @@ import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
+import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
 import androidx.test.espresso.matcher.ViewMatchers.isChecked
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
@@ -152,36 +153,29 @@ class WorkbenchLaunchTest {
                 awaitBooks(scenario, 27)
                 onView(withText("JHN 3:16")).check(matches(isDisplayed()))
                 assertEquals(null, repository.loadState().defaultWordOrder)
-                onView(withId(R.id.audio_verse_record)).perform(click())
                 select(R.string.audio_word_order_english)
                 waitForDefault("ENGLISH_SVO")
                 scenario.recreate()
                 awaitBooks(scenario, 27)
                 onView(withText("JHN 3:16")).check(matches(isDisplayed()))
-                onView(withId(R.id.audio_verse_record)).perform(click())
                 select(R.string.audio_word_order_greek)
                 select(R.string.audio_word_order_custom)
-                pressBack()
-                onView(withId(R.id.audio_verse_close)).perform(click())
+                closeVerse()
                 waitForSave(scenario)
                 waitForDefault("ENGLISH_SVO")
                 onView(withId(R.id.audio_choose_verse)).perform(click())
                 onView(withContentDescription(first.words.joinToString(" ") { it.surface })).perform(click())
-                onView(withId(R.id.audio_verse_record)).perform(click())
                 onView(withId(R.id.audio_verse_word_order)).check { view, _ ->
                     assertEquals(context.getString(R.string.audio_word_order_english), (view as Spinner).selectedItem)
                 }
                 select(R.string.audio_word_order_japanese)
-                pressBack()
-                onView(withId(R.id.audio_verse_close)).perform(click())
+                closeVerse()
                 waitForSave(scenario)
                 onView(withContentDescription(first.words.joinToString(" ") { it.surface })).perform(click())
-                onView(withId(R.id.audio_verse_record)).perform(click())
                 onView(withId(R.id.audio_verse_word_order)).check { view, _ ->
                     assertEquals(context.getString(R.string.audio_word_order_japanese), (view as Spinner).selectedItem)
                 }
-                pressBack()
-                onView(withId(R.id.audio_verse_close)).perform(click())
+                closeVerse()
                 waitForSave(scenario)
                 scenario.recreate()
                 awaitBooks(scenario, 27)
@@ -191,12 +185,11 @@ class WorkbenchLaunchTest {
                 val other = File(context.filesDir, "projects/project-002").apply { mkdirs() }
                 File(other, "project-name.txt").writeText("Project002")
                 File(other, "verse-onboarding").writeText("JHN 3:16")
-                onView(withId(R.id.audio_verse_close)).perform(click())
+                closeVerse()
                 pressBack()
                 onView(withText("Project002")).perform(click())
                 assertTrue(awaitBookCount(scenario, 27, 15_000))
                 assertEquals(null, AudioProjectRepository(other).loadState().defaultWordOrder)
-                onView(withId(R.id.audio_verse_record)).perform(click())
                 select(R.string.audio_word_order_japanese)
                 assertEquals("JAPANESE_SOV", AudioProjectRepository(other).loadState().defaultWordOrder)
                 assertEquals("ENGLISH_SVO", repository.loadState().defaultWordOrder)
@@ -213,7 +206,6 @@ class WorkbenchLaunchTest {
         val word = verse.words[wordIndex]
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withId(R.id.audio_verse_record)).perform(click())
             onView(withId(R.id.audio_verse_word_order)).check(matches(isDisplayed()))
             onView(withId(R.id.clip_guide_mode)).check(matches(isDisplayed()))
             scenario.onActivity { activity ->
@@ -250,17 +242,8 @@ class WorkbenchLaunchTest {
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
             onView(withText("JHN 3:16")).check(matches(isDisplayed()))
-            onView(withId(R.id.audio_verse_close)).check(matches(isDisplayed()))
-            onView(withId(R.id.audio_verse_record))
-                .check(matches(isDisplayed()))
-                .check(matches(withContentDescription(R.string.audio_record_verse_words)))
-                .check { view, _ ->
-                    val header = view.parent as ViewGroup
-                    val play = header.getChildAt(header.indexOfChild(view) - 1)
-                    assertEquals(context.getString(R.string.audio_play_verse), play.contentDescription)
-                    assertEquals(context.getString(R.string.audio_record_symbol), (view as TextView).text.toString())
-                }
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            onView(withId(R.id.clip_toolbar)).check(matches(isDisplayed()))
+            closeVerse()
             onView(withId(R.id.audio_workbench_chapter)).check(matches(withText("1")))
             onView(withId(R.id.audio_workbench_chapter)).perform(click())
             onView(isAssignableFrom(NumberPicker::class.java)).check(matches(isDisplayed()))
@@ -284,7 +267,7 @@ class WorkbenchLaunchTest {
         )
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 1)
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             onView(withId(R.id.audio_workbench_coverage)).check(matches(withText("0 of 1 recorded")))
             openSettings(scenario)
             onView(withId(R.id.audio_workbench_export)).check(matches(isEnabled()))
@@ -300,7 +283,7 @@ class WorkbenchLaunchTest {
     fun chapterPickerPreservesSelectionOnRefreshAndResetsForAnotherBook() {
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             onView(withId(R.id.audio_workbench_chapter)).perform(click())
             onView(isAssignableFrom(NumberPicker::class.java)).perform(object : ViewAction {
                 override fun getDescription() = "Select chapter 3"
@@ -322,7 +305,7 @@ class WorkbenchLaunchTest {
             pressBack()
             onView(allOf(withText("Project001"), isDisplayed())).perform(click())
             assertTrue(awaitBookCount(scenario, 27, 15_000))
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             onView(withId(R.id.audio_workbench_chapter)).check(matches(withText("3")))
             scenario.onActivity { activity ->
                 val spinner = activity.findViewById<Spinner>(R.id.audio_workbench_books)
@@ -347,87 +330,28 @@ class WorkbenchLaunchTest {
         val skipped = verse.words.filterNot { it.proper }.first { candidate ->
             verse.words.count { it.surface == candidate.surface } == 1
         }
-        var expectedSurfaceOrder: List<String>? = null
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withText(skipped.surface)).check(matches(isDisplayed()))
-            onView(withText(skipped.surface)).perform(object : ViewAction {
-                override fun getDescription() = "Drag the word onto its adjacent card"
-
-                override fun getConstraints() = isAssignableFrom(TextView::class.java)
-
-                override fun perform(uiController: UiController, view: View) {
-                    var token = view
-                    while (token !is FrameLayout || token.parent !is ViewGroup) {
-                        token = token.parent as? View
-                            ?: throw AssertionError("Greek word token was not found")
-                    }
-                    val flow = token.parent as ViewGroup
-                    val sourceIndex = flow.indexOfChild(token)
-                    val targetIndex = if (sourceIndex == 0) 1 else sourceIndex - 1
-                    check(targetIndex != sourceIndex)
-                    val expected = (0 until flow.childCount).map { index ->
-                        val stack = (flow.getChildAt(index) as FrameLayout).getChildAt(0) as ViewGroup
-                        (stack.getChildAt(1) as TextView).text.toString()
-                    }.toMutableList()
-                    val moved = expected.removeAt(sourceIndex)
-                    expected.add(targetIndex, moved)
-                    expectedSurfaceOrder = expected
-                    val start = IntArray(2)
-                    val end = IntArray(2)
-                    token.getLocationOnScreen(start)
-                    flow.getChildAt(targetIndex).getLocationOnScreen(end)
-                    val downTime = SystemClock.uptimeMillis()
-                    fun inject(action: Int, x: Int, y: Int) {
-                        val event = MotionEvent.obtain(
-                            downTime, SystemClock.uptimeMillis(), action, x.toFloat(), y.toFloat(), 0
-                        )
-                        try {
-                            uiController.injectMotionEvent(event)
-                        } finally {
-                            event.recycle()
-                        }
-                    }
-                    inject(
-                        MotionEvent.ACTION_DOWN,
-                        start[0] + token.width / 2,
-                        start[1] + token.height / 2
-                    )
-                    uiController.loopMainThreadForAtLeast(
-                        (ViewConfiguration.getLongPressTimeout() + ViewConfiguration.getTapTimeout() + 100).toLong()
-                    )
-                    inject(
-                        MotionEvent.ACTION_MOVE,
-                        end[0] + flow.getChildAt(targetIndex).width / 2,
-                        end[1] + flow.getChildAt(targetIndex).height / 2
-                    )
-                    assertTrue("The held card did not follow the finger", token.translationX != 0f || token.translationY != 0f)
-                    inject(
-                        MotionEvent.ACTION_UP,
-                        end[0] + flow.getChildAt(targetIndex).width / 2,
-                        end[1] + flow.getChildAt(targetIndex).height / 2
-                    )
-                }
-            })
-            onView(withContentDescription(context.getString(R.string.audio_word_unspoken, skipped.surface)))
-                .perform(click())
+            val skippedIndex = verse.words.indexOfFirst { it.surface == skipped.surface && it === skipped }
+            scenario.onActivity { activity ->
+                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                assertTrue(chips.getChildAt(skippedIndex).performClick())
+            }
             onView(withText(R.string.audio_word_disable)).perform(click())
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             val stateFile = File(directory, "audio-state.json")
             val saveDeadline = System.currentTimeMillis() + 15_000
             while (!stateFile.isFile && System.currentTimeMillis() < saveDeadline) Thread.sleep(50)
             assertTrue("Verse order was not saved", stateFile.isFile)
             val saved = AudioProjectRepository(directory).loadState()
-            val savedOrder = saved.wordOrders["JHN 1:1"]
-                ?: throw AssertionError("Reordered verse indices were not saved")
-            assertEquals(expectedSurfaceOrder, savedOrder.map { verse.words[it].surface })
             assertTrue(skipped.unspokenKey in saved.unspoken)
             onView(withId(R.id.audio_choose_verse)).perform(click())
             onView(withContentDescription(verse.words.joinToString(" ") { it.surface })).perform(click())
-            onView(withId(R.id.audio_verse_more)).perform(click())
+            onView(withContentDescription("More options")).perform(click())
+            onView(withText(R.string.audio_download_verse)).perform(click())
             onView(withText(R.string.audio_format_wav)).check(matches(isDisplayed()))
             onView(withText(android.R.string.cancel)).perform(click())
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
         }
     }
 
@@ -642,7 +566,7 @@ class WorkbenchLaunchTest {
         val shortVerse = AudioVerse(verse.reference, listOf(word))
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             val clip = AudioProjectRepository(directory).clipFile(word.surface)
             check(clip.parentFile!!.mkdirs() || clip.parentFile!!.isDirectory)
             clip.writeBytes(VerseAudio.encodeWav(FloatArray(VerseAudio.SAMPLE_RATE) { 0.1f }))
@@ -687,7 +611,7 @@ class WorkbenchLaunchTest {
         val shortVerse = AudioVerse(verse.reference, listOf(word))
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             val clip = AudioProjectRepository(directory).clipFile(word.surface)
             check(clip.parentFile!!.mkdirs() || clip.parentFile!!.isDirectory)
             clip.writeBytes(VerseAudio.encodeWav(FloatArray(10 * VerseAudio.SAMPLE_RATE) { 0.1f }))
@@ -719,13 +643,17 @@ class WorkbenchLaunchTest {
         createLegacyProject()
         val context = grantRecordingPermission()
         val repository = AudioProjectRepository(directory)
-        val surface = context.assets.open("books/JHN.xml").bufferedReader().use {
-            val words = MaculaXml.parse(it.readText()).first { verse -> verse.reference == "JHN 1:1" }.words
-            words.first { word -> words.count { it.surface == word.surface } == 1 }.surface
+        val jhn11 = context.assets.open("books/JHN.xml").bufferedReader().use {
+            MaculaXml.parse(it.readText()).first { verse -> verse.reference == "JHN 1:1" }.words
         }
+        val surface = jhn11.first { word -> jhn11.count { it.surface == word.surface } == 1 }.surface
+        val wordIndex = jhn11.indexOfFirst { it.surface == surface }
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 27)
-            onView(withContentDescription(context.getString(R.string.audio_word_unspoken, surface))).perform(click())
+            scenario.onActivity { activity ->
+                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
+                assertTrue(chips.getChildAt(wordIndex).performClick())
+            }
             val current = repository.clipFile(surface)
             check(current.parentFile!!.mkdirs() || current.parentFile!!.isDirectory)
             val original = VerseAudio.encodeWav(FloatArray(16000) { 0.1f })
@@ -756,7 +684,6 @@ class WorkbenchLaunchTest {
             check(clip.parentFile!!.mkdirs() || clip.parentFile!!.isDirectory)
             val original = VerseAudio.encodeWav(FloatArray(16000) { 0.1f })
             clip.writeBytes(original)
-            onView(withId(R.id.audio_verse_record)).perform(click())
             onView(withId(R.id.audio_verse_word_order)).perform(click())
             onData(`is`(context.getString(R.string.audio_word_order_greek))).perform(click())
             onView(withId(R.id.clip_toolbar)).check(matches(isDisplayed()))
@@ -781,7 +708,7 @@ class WorkbenchLaunchTest {
             onView(withText("Keep & next")).perform(click())
             onView(withText("1 / ${words.size} reviewed"))
                 .check(matches(withText("1 / ${words.size} reviewed")))
-            val label = words[1].gloss.ifBlank { words[1].mandarin.ifBlank { "[translation needed]" } }
+            val label = words[1].gloss.ifBlank { words[1].mandarin.ifBlank { "\u00B7" } }
             scenario.onActivity { activity ->
                 val scroll = activity.findViewById<androidx.core.widget.NestedScrollView>(R.id.clip_scroll)
                 val cards = activity.findViewById<View>(R.id.clip_cards)
@@ -812,8 +739,6 @@ class WorkbenchLaunchTest {
             pressBack()
             onView(withText("Discard")).perform(click())
             assertArrayEquals(original, clip.readBytes())
-            onView(withId(R.id.audio_verse_close)).check(matches(isDisplayed()))
-            onView(withId(R.id.audio_verse_record)).check(matches(isDisplayed())).check(matches(isEnabled()))
         }
     }
 
@@ -845,7 +770,7 @@ class WorkbenchLaunchTest {
         val repository = AudioProjectRepository(directory)
         ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
             awaitBooks(scenario, 1)
-            onView(withId(R.id.audio_verse_close)).perform(click())
+            closeVerse()
             onView(withId(R.id.audio_workbench_record)).check(matches(isDisplayed()))
             fun touch(action: Int) = scenario.onActivity { activity ->
                 val button = activity.findViewById<Button>(R.id.audio_workbench_record)
@@ -904,14 +829,19 @@ class WorkbenchLaunchTest {
         assertTrue("Settings menu action was not available", opened)
     }
 
+    private fun closeVerse() {
+        onView(allOf(withContentDescription(R.string.audio_back), isDescendantOfA(withId(R.id.clip_toolbar))))
+            .perform(click())
+    }
+
     private fun awaitBooks(scenario: ActivityScenario<WorkbenchActivity>, count: Int) {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         if (!awaitBookCount(scenario, count, 500)) {
             var verseOpen = false
             scenario.onActivity { activity ->
-                verseOpen = activity.findViewById<View>(R.id.audio_verse_close)?.isShown == true
+                verseOpen = activity.findViewById<View>(R.id.clip_toolbar)?.isShown == true
             }
-            if (verseOpen) onView(withId(R.id.audio_verse_close)).perform(click())
+            if (verseOpen) closeVerse()
             if (!awaitBookCount(scenario, count, 500)) {
                 onView(allOf(withText("Project001"), isDisplayed())).perform(click())
             }

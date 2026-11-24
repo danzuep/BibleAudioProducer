@@ -20,6 +20,8 @@ class VerseSliceWaveform @JvmOverloads constructor(context: Context, attrs: Attr
     private var visibleSamples = 1
     private var windowStart = 0
     private var dropTarget = -1
+    /** Segments that hold no word, such as the audio before and after the speech. */
+    var muted: Set<Int> = emptySet()
     var onSelect: (Int) -> Unit = {}
     var onBoundary: (Int, Int) -> Unit = { _, _ -> }
 
@@ -85,7 +87,7 @@ class VerseSliceWaveform @JvmOverloads constructor(context: Context, attrs: Attr
         val scale = width.toFloat() / visible
         fun position(sample: Int) = (sample - windowStart) * scale
         for (i in 0 until boundaries.lastIndex) {
-            paint.color = color(i, if (i == selected) 170 else 75)
+            paint.color = color(i, if (i == selected) 170 else 75, i in muted)
             canvas.drawRect(position(boundaries[i]), 0f, position(boundaries[i + 1]), height.toFloat(), paint)
         }
         if (dropTarget in 0 until boundaries.lastIndex) {
@@ -105,7 +107,7 @@ class VerseSliceWaveform @JvmOverloads constructor(context: Context, attrs: Attr
             canvas.drawLine(x.toFloat(), height / 2f - half, x.toFloat(), height / 2f + half, paint)
         }
         for (i in 0 until boundaries.lastIndex) {
-            if (i == 0 && selected != 0) continue
+            if (i == 0) continue
             val x = position(boundaries[i])
             if (x < 0 || x > width) continue
             val active = i == selected || i == selected + 1
@@ -129,7 +131,7 @@ class VerseSliceWaveform @JvmOverloads constructor(context: Context, attrs: Attr
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val radius = 24 * resources.displayMetrics.density
-                val closest = (0 until boundaries.lastIndex).minByOrNull {
+                val closest = (1 until boundaries.lastIndex).minByOrNull {
                     abs((boundaries[it] - windowStart).toFloat() / windowSize() * width - event.x)
                 }
                 dragging = closest?.takeIf {
@@ -147,8 +149,9 @@ class VerseSliceWaveform @JvmOverloads constructor(context: Context, attrs: Attr
             }
             MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
                 if (dragging >= 0) {
-                    val low = if (dragging == 0) 0 else boundaries[dragging - 1] + 1
-                    val high = boundaries[dragging + 1] - 1
+                    val low = boundaries[dragging - 1] + 1
+                    // Later boundaries are pushed along, so only leave room for the segments after this one.
+                    val high = samples.size - (boundaries.lastIndex - dragging)
                     val target = sample.coerceIn(low, high)
                     val radius = 80
                     val crossing = (maxOf(low, target - radius)..minOf(high, target + radius))
@@ -179,7 +182,8 @@ class VerseSliceWaveform @JvmOverloads constructor(context: Context, attrs: Attr
     }
 
     companion object {
-        fun color(index: Int, alpha: Int = 255): Int {
+        fun color(index: Int, alpha: Int = 255, muted: Boolean = false): Int {
+            if (muted) return (alpha shl 24) or 0x7A8594
             val colors = intArrayOf(0x3569B1, 0x008776, 0xA65728, 0x8754A4, 0xA83859, 0x5D7924)
             return (alpha shl 24) or colors[index % colors.size]
         }

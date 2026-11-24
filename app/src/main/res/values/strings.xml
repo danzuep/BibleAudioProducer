@@ -9,7 +9,6 @@
     <string name="audio_choose_verse">Show verses</string>
     <string name="audio_project_create_failed">Unable to create the project.</string>
     <string name="audio_project_load_failed">Unable to load this project.</string>
-    <string name="audio_verse_drag_hint">Hold a word, drag it into place, then release. Tap for word details.</string>
     <string name="audio_word_details">Word details</string>
     <string name="audio_word_record">Record word</string>
     <string name="audio_word_play">Play word</string>
@@ -81,7 +80,6 @@
     <string name="audio_download_preparing">Preparing verse audio…</string>
     <string name="audio_download_too_long">The verse is too long to render.</string>
     <string name="audio_arrange_verse">Arrange and omit words</string>
-    <string name="audio_record_verse_words">Record verse words</string>
     <string name="audio_arrange_title">Arrange %1$s</string>
     <string name="audio_arrange_description">Move phrases into your language’s order. Uncheck a Greek form to skip it everywhere it occurs.</string>
     <string name="audio_move_earlier">Move earlier</string>

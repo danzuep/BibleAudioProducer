@@ -482,11 +482,11 @@ class VerseSliceEditorTest {
                     assertEquals(100, (field("boundaries").get(editor) as VerseBoundaries).start(1))
                     VerseTakeEditor::class.java.getDeclaredMethod("selectCard", Int::class.javaPrimitiveType)
                         .apply { isAccessible = true }.invoke(editor, 2)
-                    assertEquals(0, reviewedCount())
+                    assertEquals(1, reviewedCount())
                     (field("next").get(editor) as Button).performClick()
                 }
                 onView(withText("Replace")).inRoot(isDialog()).perform(click())
-                waitForReviewed(1)
+                waitForReviewed(2)
                 assertArrayEquals(VerseAudio.encodeWav(VerseAudio.slice(samples, 800, 1500)), clip.readBytes())
                 scenario.onActivity { editor.dispose() }
             }

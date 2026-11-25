@@ -44,7 +44,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="12dp"
-                    android:text="Record the enabled words in card order. Suggested boundaries are not speech recognition: select a card, drag its handles, and review each clip. The first and last · cards hold the audio before and after the words, so drag their handles to trim the start and end. Insert a · before a card to cut a mistake out. Dragging a boundary to the right pushes the later boundaries along and re-suggests them. Reordering cards changes which audio segment belongs to each card. Repeated Greek forms share a saved clip."
+                    android:text="Record the enabled words in card order. Suggested boundaries are not speech recognition: select a card, drag its handles, and review each clip. The first and last · cards hold the audio before and after the words, so drag their handles to trim the start and end. Insert a · before a card to cut a mistake out. Dragging a boundary to the right pushes the later boundaries along and re-suggests them. Reordering cards changes which audio segment belongs to each card. Repeated Greek forms share a saved clip. Drag a card to a waveform segment, or drag its handle to change the audio order."
                     android:textAppearance="?attr/textAppearanceBodyMedium" />
             </com.google.android.material.card.MaterialCardView>
 
@@ -172,11 +172,6 @@
                 android:layout_marginTop="12dp"
                 android:clipToPadding="false"
                 android:orientation="horizontal" />
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Drag a card to a waveform segment, or drag its handle to change the audio order."
-                android:textAppearance="?attr/textAppearanceBodySmall" />
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

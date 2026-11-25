@@ -311,6 +311,23 @@ internal class VerseTakeEditor(
         }
     }
 
+    /** A surface form that is just the lemma (ignoring case and accents) also serves as the lemma's recording. */
+    private fun linkLemma(word: VerseWord, part: FloatArray) {
+        if (word.surface == word.lemma || plain(word.surface) != plain(word.lemma)) return
+        val candidate = repository.recordingCandidateFile(word.lemma)
+        if (candidate.exists()) return
+        try {
+            candidate.writeBytes(VerseAudio.encodeWav(part))
+            repository.commitRecording(word.lemma, "audio/wav")
+        } catch (e: Exception) {
+            candidate.delete()
+        }
+    }
+
+    private fun plain(text: String) = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+        .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
+        .replace('ς', 'σ').lowercase(Locale.ROOT)
+
     private fun playExisting(position: Int) {
         val word = slots.getOrNull(position) ?: return
         stopPlayback()
@@ -418,8 +435,8 @@ internal class VerseTakeEditor(
         timing.text = if (points == null) "No recording" else {
             val first = points.start(index)
             val last = points.end(index)
-            val secondsFormat = DecimalFormat("0.000000", DecimalFormatSymbols(Locale.US))
-            val millisFormat = DecimalFormat("0.0000", DecimalFormatSymbols(Locale.US))
+            val secondsFormat = DecimalFormat("0.###", DecimalFormatSymbols(Locale.US))
+            val millisFormat = DecimalFormat("0.###", DecimalFormatSymbols(Locale.US))
             "${secondsFormat.format(first.toDouble() / VerseAudio.SAMPLE_RATE)}s – " +
                 "${secondsFormat.format(last.toDouble() / VerseAudio.SAMPLE_RATE)}s " +
                 "(${millisFormat.format((last - first) * 1000.0 / VerseAudio.SAMPLE_RATE)} ms)"
@@ -878,6 +895,7 @@ internal class VerseTakeEditor(
                     candidate.writeBytes(VerseAudio.encodeWav(part))
                     written = true
                     repository.commitRecording(word.surface, "audio/wav")
+                    linkLemma(word, part)
                     activity.runOnUiThread {
                         if (!closed) {
                             working = false

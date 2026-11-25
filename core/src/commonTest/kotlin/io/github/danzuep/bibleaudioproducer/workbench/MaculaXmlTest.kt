@@ -262,4 +262,47 @@ class MaculaXmlTest {
             english.joinToString(" ")
         )
     }
+
+    private fun englishGlosses(xml: String) = MaculaXml.parse("<book><sentence>$xml</sentence></book>").single().let {
+        VerseWorkflow.reorder(it, WordOrderMode.ENGLISH_SVO).joinToString(" ") { word -> word.gloss }
+    }
+
+    @Test
+    fun postpositiveOunMovesBeforeTheClauseLikeDeAndGar() {
+        // JHN 6:67 BSB: "So Jesus asked the Twelve"
+        assertEquals("therefore Said Jesus", englishGlosses("""
+<wg class="cl" rule="Conj-CL">
+<w ref="JHN 6:67!2" class="conj" lemma="οὖν" gloss="therefore">οὖν</w>
+<wg class="cl" rule="V-S">
+<w role="v" ref="JHN 6:67!1" class="verb" lemma="λέγω" gloss="Said">εἶπεν</w>
+<w role="s" ref="JHN 6:67!3" class="noun" lemma="Ἰησοῦς" gloss="Jesus">Ἰησοῦς</w>
+</wg>
+</wg>
+        """.trimIndent()))
+    }
+
+    @Test
+    fun negationFollowsTheCopula() {
+        // JHN 5:31 BSB: "my testimony is not valid"
+        assertEquals("testimony is not true", englishGlosses("""
+<wg class="cl" rule="S-ADV-V-P">
+<w role="s" ref="JHN 5:31!1" class="noun" lemma="μαρτυρία" gloss="testimony">μαρτυρία</w>
+<w role="adv" ref="JHN 5:31!2" class="adv" lemma="οὐ" gloss="not">οὐκ</w>
+<w role="v" ref="JHN 5:31!3" class="verb" lemma="εἰμί" gloss="is">ἐστιν</w>
+<w role="p" ref="JHN 5:31!4" class="adj" lemma="ἀληθής" gloss="true">ἀληθής</w>
+</wg>
+        """.trimIndent()))
+    }
+
+    @Test
+    fun questionWordLeadsItsClause() {
+        // JHN 1:19 BSB: "Who are you?"
+        assertEquals("who You are", englishGlosses("""
+<wg class="cl" rule="S-V-P">
+<w role="s" ref="JHN 1:19!1" class="pron" type="personal" lemma="σύ" gloss="You">σὺ</w>
+<w role="v" ref="JHN 1:19!2" class="verb" lemma="εἰμί" gloss="are">εἶ</w>
+<w role="p" ref="JHN 1:19!3" class="pron" type="interrogative" lemma="τίς" gloss="who">τίς</w>
+</wg>
+        """.trimIndent()))
+    }
 }

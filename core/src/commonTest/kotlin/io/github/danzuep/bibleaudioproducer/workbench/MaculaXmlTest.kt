@@ -262,4 +262,120 @@ class MaculaXmlTest {
             english.joinToString(" ")
         )
     }
+
+    private fun englishGlosses(xml: String) = MaculaXml.parse("<book><sentence>$xml</sentence></book>").single().let {
+        VerseWorkflow.reorder(it, WordOrderMode.ENGLISH_SVO).joinToString(" ") { word -> word.gloss }
+    }
+
+    @Test
+    fun postpositiveOunMovesBeforeTheClauseLikeDeAndGar() {
+        // JHN 6:67 BSB: "So Jesus asked the Twelve"
+        assertEquals("therefore Jesus Said", englishGlosses("""
+<wg class="cl" rule="Conj-CL">
+<w ref="JHN 6:67!2" class="conj" lemma="οὖν" gloss="therefore">οὖν</w>
+<wg class="cl" rule="V-S">
+<w role="v" ref="JHN 6:67!1" class="verb" lemma="λέγω" gloss="Said">εἶπεν</w>
+<w role="s" ref="JHN 6:67!3" class="noun" lemma="Ἰησοῦς" gloss="Jesus">Ἰησοῦς</w>
+</wg>
+</wg>
+        """.trimIndent()))
+    }
+
+    @Test
+    fun negationFollowsTheCopula() {
+        // JHN 5:31 BSB: "my testimony is not valid"
+        assertEquals("testimony is not true", englishGlosses("""
+<wg class="cl" rule="S-ADV-V-P">
+<w role="s" ref="JHN 5:31!1" class="noun" lemma="μαρτυρία" gloss="testimony">μαρτυρία</w>
+<w role="adv" ref="JHN 5:31!2" class="adv" lemma="οὐ" gloss="not">οὐκ</w>
+<w role="v" ref="JHN 5:31!3" class="verb" lemma="εἰμί" gloss="is">ἐστιν</w>
+<w role="p" ref="JHN 5:31!4" class="adj" lemma="ἀληθής" gloss="true">ἀληθής</w>
+</wg>
+        """.trimIndent()))
+    }
+
+    @Test
+    fun questionWordLeadsItsClause() {
+        // JHN 1:19 BSB: "Who are you?"
+        assertEquals("who You are", englishGlosses("""
+<wg class="cl" rule="S-V-P">
+<w role="s" ref="JHN 1:19!1" class="pron" type="personal" lemma="σύ" gloss="You">σὺ</w>
+<w role="v" ref="JHN 1:19!2" class="verb" lemma="εἰμί" gloss="are">εἶ</w>
+<w role="p" ref="JHN 1:19!3" class="pron" type="interrogative" lemma="τίς" gloss="who">τίς</w>
+</wg>
+        """.trimIndent()))
+    }
+
+    @Test
+    fun john4v1EnglishOrderMovesTheSubjectBeforeItsVerb() {
+        // BSB: "When Jesus realized that the Pharisees were aware He was gaining and baptizing more disciples than John"
+        assertEquals(
+            "therefore When the Jesus knew that the Pharisees heard that Jesus makes and baptizes more disciples than John",
+            englishGlosses("""
+<wg rule="Conj-CL" class="cl">
+<w ref="JHN 4:1!2" class="conj" lemma="οὖν" english="now" mandarin="却" gloss="therefore">οὖν</w>
+<wg rule="ClCl2" class="cl">
+<wg rule="sub-CL" class="cl">
+<w ref="JHN 4:1!1" class="conj" lemma="ὡς" english="when" mandarin="当" gloss="When">Ὡς</w>
+<wg rule="ClCl" class="cl">
+<w role="v" ref="JHN 4:1!3" class="verb" lemma="γινώσκω" english="knew" mandarin="知道" gloss="knew">ἔγνω</w>
+<wg rule="DetNP" class="np" role="s">
+<w ref="JHN 4:1!4" class="det" lemma="ὁ" english="the" mandarin="" gloss="-">ὁ</w>
+<w ref="JHN 4:1!5" class="noun" lemma="Ἰησοῦς" english="Jesus" mandarin="耶稣">Ἰησοῦς</w>
+</wg>
+<wg rule="that-VP" class="cl" role="o">
+<w ref="JHN 4:1!6" class="conj" lemma="ὅτι" english="that" mandarin="" gloss="that">ὅτι</w>
+<wg rule="ClCl" class="cl">
+<w role="v" ref="JHN 4:1!7" class="verb" lemma="ἀκούω" english="heard" mandarin="听见" gloss="heard">ἤκουσαν</w>
+<wg rule="DetNP" class="np" role="s">
+<w ref="JHN 4:1!8" class="det" lemma="ὁ" english="the" mandarin="" gloss="the">οἱ</w>
+<w ref="JHN 4:1!9" class="noun" lemma="Φαρισαῖος" english="Pharisees" mandarin="法利赛人" gloss="Pharisees">Φαρισαῖοι</w>
+</wg>
+<wg rule="that-VP" class="cl" role="o">
+<w ref="JHN 4:1!10" class="conj" lemma="ὅτι" english="that" mandarin="" gloss="that">ὅτι</w>
+<wg rule="ClCl" class="cl">
+<wg rule="S-O-V" class="cl">
+<w role="s" ref="JHN 4:1!11" class="noun" lemma="Ἰησοῦς" english="Jesus" mandarin="耶稣" gloss="Jesus">Ἰησοῦς</w>
+<wg rule="AdjpNp" class="np" role="o">
+<w ref="JHN 4:1!12" class="adj" lemma="πολύς" english="more" mandarin="多" gloss="more">πλείονας</w>
+<w ref="JHN 4:1!13" class="noun" lemma="μαθητής" english="disciples" mandarin="门徒" gloss="disciples">μαθητὰς</w>
+</wg>
+<wg rule="Conj2VP" class="vp" role="v">
+<w ref="JHN 4:1!14" class="verb" lemma="ποιέω" english="making" mandarin="收" gloss="makes">ποιεῖ</w>
+<wg >
+<w ref="JHN 4:1!15" class="conj" lemma="καί" english="and" mandarin="和" gloss="and">καὶ</w>
+<w ref="JHN 4:1!16" class="verb" lemma="βαπτίζω" english="baptizing" mandarin="施洗" gloss="baptizes">βαπτίζει</w>
+</wg>
+</wg>
+</wg>
+<wg >
+<w ref="JHN 4:1!17" class="conj" lemma="ἤ" english="than" mandarin="比" gloss="than">ἢ</w>
+<w role="s" ref="JHN 4:1!18" class="noun" lemma="Ἰωάννης" english="John" mandarin="约翰" gloss="John">Ἰωάννης</w>
+</wg>
+</wg>
+</wg>
+</wg>
+</wg>
+</wg>
+</wg>
+</wg>
+</wg>
+            """.trimIndent()).replace("  ", " ").trim()
+        )
+    }
+
+    @Test
+    fun completeClauseInsideAGroupThatCrossesVersesIsStillOrdered() {
+        val verses = MaculaXml.parse("""
+            <book><wg class="cl">
+              <wg class="cl" rule="S-O-V">
+                <w ref="JHN 1:1!1" role="s" class="noun" lemma="a">s</w>
+                <w ref="JHN 1:1!2" role="o" class="noun" lemma="b">o</w>
+                <w ref="JHN 1:1!3" role="v" class="verb" lemma="c">v</w>
+              </wg>
+              <w ref="JHN 1:2!1" role="v" class="verb" lemma="d">x</w>
+            </wg></book>
+        """.trimIndent())
+        assertEquals(listOf(0, 2, 1), VerseWorkflow.modeOrder(verses[0], WordOrderMode.ENGLISH_SVO))
+    }
 }

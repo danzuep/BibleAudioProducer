@@ -1,6 +1,9 @@
 package io.github.danzuep.bibleaudioproducer.workbench
 
 internal object MaculaWordOrder {
+    private val NEGATIONS = setOf("οὐ", "οὐκ", "οὐχ", "μή")
+    private val QUESTION_WORDS = setOf("πῶς", "ποῦ", "πόθεν", "πότε")
+
     fun order(words: List<VerseWord>, root: SyntaxGroup, mode: WordOrderMode): List<Int> {
         val result = words.indices.toMutableList()
         val slots = mode.slots ?: return result
@@ -34,21 +37,24 @@ internal object MaculaWordOrder {
             is SyntaxWord -> words[node.index].head
             is SyntaxGroup -> node.head || node.children.any(::head)
         }
-        fun visit(group: SyntaxGroup, incomplete: Boolean, subordinate: Boolean, inNominal: Boolean) {
-            val partial = incomplete || group.partial
+        fun isWord(node: SyntaxNode, test: (VerseWord) -> Boolean) =
+            node is SyntaxWord && test(words[node.index])
+        fun visit(group: SyntaxGroup, subordinate: Boolean, inNominal: Boolean) {
+            // A group that runs into another verse stays put, but complete groups inside it are still ordered.
+            val partial = group.partial
             val sub = subordinate || group.rule.equals("sub-CL", ignoreCase = true)
             val nominal = inNominal || group.category == "np"
-            group.children.filterIsInstance<SyntaxGroup>().forEach { visit(it, partial, sub, nominal) }
+            group.children.filterIsInstance<SyntaxGroup>().forEach { visit(it, sub, nominal) }
             val all = members(group)
             if (partial || !contiguous(all)) return
             if (group.children.size == 2) {
                 val particle = group.children.filterIsInstance<SyntaxWord>()
-                    .singleOrNull { words[it.index].lemma in setOf("γάρ", "δέ") }
+                    .singleOrNull { words[it.index].lemma in setOf("γάρ", "δέ", "οὖν") }
                 val clause = group.children.filterIsInstance<SyntaxGroup>().singleOrNull { it.category == "cl" }
                 if (particle != null && clause != null) {
                     val remaining = current(clause)
                     replace(all, listOf(particle.index) + remaining)
-                    visit(clause, partial, sub, nominal)
+                    visit(clause, sub, nominal)
                 }
             }
             val children = group.children.sortedBy { positions(members(it)).firstOrNull() ?: Int.MAX_VALUE }
@@ -106,7 +112,7 @@ internal object MaculaWordOrder {
             ) {
                 ""
             } else if (
-                node is SyntaxWord && words[node.index].lemma in setOf("γάρ", "δέ")
+                node is SyntaxWord && words[node.index].lemma in setOf("γάρ", "δέ", "οὖν")
             ) "CONJ" else when (role(node)) {
                 "s" -> "S"
                 "v", "vc" -> "V"
@@ -126,7 +132,11 @@ internal object MaculaWordOrder {
                         parts.lastOrNull()?.slot == "ADV"
                     ) {
                         val adverb = parts.removeAt(parts.lastIndex)
-                        parts.add(Part(adverb.nodes + node, "V"))
+                        // "is not" rather than "not is".
+                        val negatedBe = mode == WordOrderMode.ENGLISH_SVO &&
+                            adverb.nodes.singleOrNull()?.let { isWord(it) { w -> w.lemma in NEGATIONS } } == true &&
+                            isWord(node) { w -> w.lemma == "εἰμί" }
+                        parts.add(Part(if (negatedBe) listOf(node) + adverb.nodes else adverb.nodes + node, "V"))
                     } else parts.add(Part(listOf(node), slot(node)))
                 }
                 val leading = parts.firstOrNull()?.takeIf {
@@ -149,7 +159,18 @@ internal object MaculaWordOrder {
                     conjunctions + listOfNotNull(lead) + sorted.filter { it.slot == "V" } +
                         sorted.filter { it !== lead && it.slot != "V" && it.slot != "CONJ" }
                 } else sorted
-                replace(indices, (listOfNotNull(leading) + reordered).flatMap { it.nodes.flatMap(::current) })
+                // "Who are you": a question word leads its clause.
+                val question = if (mode == WordOrderMode.ENGLISH_SVO) {
+                    reordered.firstOrNull { part ->
+                        part.slot != "CONJ" && part.nodes.size == 1 && part.nodes.single().let { node ->
+                            (node is SyntaxWord || (node as SyntaxGroup).category != "cl") &&
+                                members(node).any { words[it].let { w -> w.type == "interrogative" || w.lemma in QUESTION_WORDS } }
+                        }
+                    }
+                } else null
+                val ordered = if (question == null) listOfNotNull(leading) + reordered else
+                    listOf(question) + listOfNotNull(leading) + reordered.filter { it !== question }
+                replace(indices, ordered.flatMap { it.nodes.flatMap(::current) })
             }
             val segment = mutableListOf<SyntaxNode>()
             for (child in orderedChildren) {
@@ -160,7 +181,7 @@ internal object MaculaWordOrder {
             }
             sort(segment)
         }
-        visit(root, false, false, false)
+        visit(root, false, false)
         return result
     }
 }

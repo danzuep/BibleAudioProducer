@@ -178,29 +178,6 @@
                 android:text="Drag a card to a waveform segment, or drag its handle to change the audio order."
                 android:textAppearance="?attr/textAppearanceBodySmall" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/clip_preview_existing"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Play existing" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/clip_separator"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Insert · before" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/clip_finish"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Finish verse" />
-            </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 

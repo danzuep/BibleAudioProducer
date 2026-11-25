@@ -703,7 +703,7 @@ class WorkbenchLaunchTest {
             onView(withId(R.id.clip_next)).perform(click())
             onView(withText(android.R.string.cancel)).perform(click())
             assertArrayEquals(original, clip.readBytes())
-            onView(withText("Keep & next")).perform(click())
+            onView(withId(R.id.clip_keep)).perform(click())
             onView(withText("1 / ${words.size} reviewed"))
                 .check(matches(withText("1 / ${words.size} reviewed")))
             val label = words[1].gloss.ifBlank { words[1].mandarin.ifBlank { "\u00B7" } }

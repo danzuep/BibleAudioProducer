@@ -68,8 +68,8 @@
                 android:id="@+id/clip_tokens"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:chipSpacingHorizontal="4dp"
-                app:chipSpacingVertical="1dp" />
+                app:chipSpacingHorizontal="1dp"
+                app:chipSpacingVertical="8dp" />
             <LinearLayout
                 android:id="@+id/clip_custom_row"
                 android:layout_width="match_parent"
@@ -96,6 +96,7 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 app:cardBackgroundColor="#171E29"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="4dp">
@@ -204,21 +205,27 @@
             android:layout_weight="1"
             android:gravity="center"
             android:orientation="vertical">
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/clip_next"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="8dp"
-                android:text="✓ →"
-                android:contentDescription="Save selected clip and go to next card" />
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/clip_keep"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:layout_marginHorizontal="8dp"
-                android:text="Keep &amp; next"
-                android:visibility="gone" />
+                android:orientation="horizontal">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/clip_keep"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:layout_weight="1"
+                    android:text="(✓)→"
+                    android:contentDescription="Keep the existing clip and go to next card" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/clip_next"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="4dp"
+                    android:layout_weight="1"
+                    android:text="✓→"
+                    android:contentDescription="Save selected clip and go to next card" />
+            </LinearLayout>
         </LinearLayout>
         <com.google.android.material.button.MaterialButton
             android:id="@+id/clip_nudge_forward"

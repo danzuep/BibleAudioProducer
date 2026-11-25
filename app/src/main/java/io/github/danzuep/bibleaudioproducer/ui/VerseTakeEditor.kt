@@ -385,6 +385,8 @@ internal class VerseTakeEditor(
         }
     }
 
+    private var keepScript = false
+
     private fun refresh() {
         val ready = samples.isNotEmpty() && !working && !recording
         (record as MaterialButton).setIconResource(if (recording) android.R.drawable.ic_media_pause else android.R.drawable.ic_btn_speak_now)
@@ -397,7 +399,6 @@ internal class VerseTakeEditor(
         val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
         next.isEnabled = ready
         keep.isEnabled = ready && existing
-        keep.visibility = if (keep.isEnabled) View.VISIBLE else View.GONE
         nudgeBack.isEnabled = ready
         nudgeForward.isEnabled = nudgeBack.isEnabled
         val edge = if (index < slots.lastIndex) "end" else "start"
@@ -418,7 +419,7 @@ internal class VerseTakeEditor(
                 "(${millisFormat.format((last - first) * 1000.0 / VerseAudio.SAMPLE_RATE)} ms)"
         }
         if (!reordering) cards.notifyDataSetChanged()
-        updateGuide()
+        if (!keepScript) updateGuide()
         showWaveform()
     }
 
@@ -449,10 +450,28 @@ internal class VerseTakeEditor(
     private fun selectCard(next: Int) {
         if (working || recording || next !in slots.indices || next == index) return
         if (boundaries != null && !rememberSelection()) return
+        markExistingReviewed()
         index = next
         showSelection()
         refresh()
         scrollToSelection()
+    }
+
+    /** Selects without rebuilding the script chips, so a chip being long-pressed stays attached for its drag. */
+    private fun selectCardKeepingScript(next: Int) {
+        if (working || recording || next !in slots.indices || next == index) return
+        if (boundaries != null && !rememberSelection()) return
+        markExistingReviewed()
+        index = next
+        showSelection()
+        keepScript = true
+        try { refresh() } finally { keepScript = false }
+        scrollToSelection()
+    }
+
+    private fun markExistingReviewed() {
+        val word = slots.getOrNull(index)?.word ?: return
+        if (boundaries != null && repository.clipFile(word.surface).isFile) reviewed.add(index)
     }
 
     fun canChangeSpoken(): Boolean = samples.isEmpty() && !recording && !working
@@ -558,6 +577,7 @@ internal class VerseTakeEditor(
             val hasExisting = word != null && repository.clipFile(word.word.surface).isFile
             holder.playExisting.visibility = if (word != null) View.VISIBLE else View.GONE
             holder.playExisting.isEnabled = hasExisting && !working && !recording
+            holder.playExisting.alpha = if (hasExisting) 1f else 0.4f
             holder.playExisting.setOnClickListener {
                 val current = holder.bindingAdapterPosition
                 if (current != RecyclerView.NO_POSITION) playExisting(current)
@@ -751,7 +771,8 @@ internal class VerseTakeEditor(
             toast("This clip is too short to add a separator before it.")
             return
         }
-        points.split(index, start + (end - start) / 2)
+        // The separator takes the whole clip; the word keeps only a sliver to drag back out.
+        points.split(index, end - minOf(end - start - 1, VerseAudio.SAMPLE_RATE / 1000).coerceAtLeast(1))
         slots.add(index, null)
         val shifted = reviewed.filter { it != index }.map { if (it >= index) it + 1 else it }
         reviewed.clear()
@@ -971,8 +992,8 @@ internal class VerseTakeEditor(
         chipStrokeWidth = dp(if (isActive) 2 else 1).toFloat()
         val recorded = word != null && repository.clipFile(word.word.lemma).isFile
         setTextColor(when {
-            isActive -> onPrimary
             recorded -> androidx.core.content.ContextCompat.getColor(activity, R.color.workbench_recorded)
+            isActive -> onPrimary
             else -> onSurface
         })
         if (word == null) {
@@ -995,13 +1016,17 @@ internal class VerseTakeEditor(
         }
         setOnLongClickListener {
             if (working || recording) return@setOnLongClickListener false
-            if (spoken >= 0) selectCard(spoken)
+            if (spoken >= 0) selectCardKeepingScript(spoken)
             val drag = WordDrag(word.originalIndex)
             androidx.core.view.ViewCompat.startDragAndDrop(this, null, View.DragShadowBuilder(this), drag, 0)
         }
         setOnDragListener { _, event ->
             when (event.action) {
                 DragEvent.ACTION_DRAG_STARTED -> event.localState is WordDrag && !working && !recording
+                DragEvent.ACTION_DRAG_ENDED -> {
+                    tokens.post { if (!closed && !reordering) updateGuide() }
+                    true
+                }
                 DragEvent.ACTION_DROP -> {
                     val drag = event.localState as? WordDrag
                     val order = guideWords().map { it.originalIndex }.toMutableList()

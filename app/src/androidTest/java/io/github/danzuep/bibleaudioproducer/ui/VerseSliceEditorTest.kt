@@ -443,7 +443,7 @@ class VerseSliceEditorTest {
                     invoke("refresh")
                     VerseTakeEditor::class.java.getDeclaredMethod("selectCard", Int::class.javaPrimitiveType)
                         .apply { isAccessible = true }.invoke(editor, 2)
-                    assertEquals(0, reviewedCount())
+                    assertEquals(1, reviewedCount())
                     (field("next").get(editor) as Button).performClick()
                 }
                 fun waitForActivityFocus() {
@@ -458,7 +458,7 @@ class VerseSliceEditorTest {
                 onView(withText(android.R.string.cancel)).inRoot(isDialog()).perform(click())
                 waitForActivityFocus()
                 scenario.onActivity {
-                    assertEquals(0, reviewedCount())
+                    assertEquals(1, reviewedCount())
                     assertArrayEquals(original, clip.readBytes())
                     (field("next").get(editor) as Button).performClick()
                 }
@@ -473,7 +473,7 @@ class VerseSliceEditorTest {
                     }
                     throw AssertionError("Expected $count reviewed clips")
                 }
-                waitForReviewed(1)
+                waitForReviewed(2)
                 assertArrayEquals(VerseAudio.encodeWav(VerseAudio.slice(samples, 800, 1500)), clip.readBytes())
                 waitForActivityFocus()
                 scenario.onActivity {
@@ -482,11 +482,11 @@ class VerseSliceEditorTest {
                     assertEquals(100, (field("boundaries").get(editor) as VerseBoundaries).start(1))
                     VerseTakeEditor::class.java.getDeclaredMethod("selectCard", Int::class.javaPrimitiveType)
                         .apply { isAccessible = true }.invoke(editor, 2)
-                    assertEquals(0, reviewedCount())
+                    assertEquals(1, reviewedCount())
                     (field("next").get(editor) as Button).performClick()
                 }
                 onView(withText("Replace")).inRoot(isDialog()).perform(click())
-                waitForReviewed(1)
+                waitForReviewed(2)
                 assertArrayEquals(VerseAudio.encodeWav(VerseAudio.slice(samples, 800, 1500)), clip.readBytes())
                 scenario.onActivity { editor.dispose() }
             }
@@ -577,7 +577,7 @@ class VerseSliceEditorTest {
                 select(2)
                 reviewed.addAll(listOf(1, 2))
                 invoke("insertSeparator")
-                assertEquals(listOf(0, 400, 1600, 2200, 2800, 3200), boundaries.snapshot())
+                assertEquals(listOf(0, 400, 1600, 2784, 2800, 3200), boundaries.snapshot())
                 assertEquals(listOf(null, words[0], null, words[1], null), slots)
                 assertEquals(3, field("index").getInt(editor))
                 assertEquals(setOf(1), reviewed)

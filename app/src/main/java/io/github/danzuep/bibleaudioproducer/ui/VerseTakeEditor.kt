@@ -100,6 +100,7 @@ internal class VerseTakeEditor(
     private var customOriginal = emptyList<Pair<String, VerseRecordingWord?>>()
     private lateinit var status: TextView
     private lateinit var timing: TextView
+    private lateinit var playSlice: MaterialButton
     private lateinit var help: View
     private lateinit var playTake: MaterialButton
     private lateinit var nudgeBack: Button
@@ -143,15 +144,7 @@ internal class VerseTakeEditor(
         toolbar.setNavigationContentDescription(R.string.audio_back)
         toolbar.setNavigationOnClickListener { onBack() }
         help = content.findViewById(R.id.clip_help)
-        playTake = MaterialButton(context).apply {
-            layoutParams = ViewGroup.LayoutParams(dp(48), dp(48))
-            cornerRadius = dp(24)
-            insetTop = 0
-            insetBottom = 0
-            setPadding(0, 0, 0, 0)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            setIconResource(android.R.drawable.ic_media_play)
-            contentDescription = "Play verse take"
+        playTake = iconButton(android.R.drawable.ic_media_play, "Play verse").apply {
             setOnClickListener { toggleTakePlayback() }
         }
         toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
@@ -166,15 +159,8 @@ internal class VerseTakeEditor(
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = playTake
         }
-        record = MaterialButton(context).apply {
+        record = iconButton(android.R.drawable.ic_btn_speak_now, "Record verse").apply {
             id = R.id.clip_record
-            layoutParams = ViewGroup.LayoutParams(dp(48), dp(48))
-            cornerRadius = dp(24)
-            insetTop = 0
-            insetBottom = 0
-            setPadding(0, 0, 0, 0)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            setIconResource(android.R.drawable.ic_btn_speak_now)
             setOnClickListener { toggleRecord() }
         }
         toolbar.menu.add("Record verse").apply {
@@ -262,6 +248,7 @@ internal class VerseTakeEditor(
         content.findViewById<View>(R.id.clip_zoom_out).setOnClickListener { waveform.zoomOut() }
         status = content.findViewById(R.id.clip_progress)
         timing = content.findViewById(R.id.clip_timing)
+        playSlice = content.findViewById<MaterialButton>(R.id.clip_play_slice).apply { setOnClickListener { playSelectedSlice() } }
         deck = content.findViewById(R.id.clip_cards)
         cards = WordAdapter()
         deck.layoutManager = LinearLayoutManager(context, RecyclerView.HORIZONTAL, false)
@@ -289,7 +276,7 @@ internal class VerseTakeEditor(
         keep = content.findViewById<Button>(R.id.clip_keep).apply {
             setOnClickListener {
                 val word = slots[index]?.word
-                if (word != null && repository.clipFile(word.surface).isFile && rememberSelection()) advance()
+                if (word != null && existingClip(word) != null && rememberSelection() && adoptExisting(word)) advance()
             }
         }
         refresh()
@@ -306,10 +293,45 @@ internal class VerseTakeEditor(
         }
     }
 
+    /** The surface form's recording, or failing that the lemma's, which can stand in for it. */
+    private fun existingClip(word: VerseWord): java.io.File? =
+        sequenceOf(word.surface, word.lemma).map(repository::clipFile).firstOrNull { it.isFile }
+
+    /** Copies a lemma recording to the surface form so it is used for this word; false if that fails. */
+    private fun adoptExisting(word: VerseWord): Boolean {
+        val surface = repository.clipFile(word.surface)
+        if (surface.isFile) return true
+        val lemma = repository.clipFile(word.lemma)
+        return try {
+            lemma.copyTo(surface)
+            true
+        } catch (e: java.io.IOException) {
+            toast("Unable to use the root word recording.")
+            false
+        }
+    }
+
+    /** A surface form that is just the lemma (ignoring case and accents) also serves as the lemma's recording. */
+    private fun linkLemma(word: VerseWord, part: FloatArray) {
+        if (word.surface == word.lemma || plain(word.surface) != plain(word.lemma)) return
+        val candidate = repository.recordingCandidateFile(word.lemma)
+        if (candidate.exists()) return
+        try {
+            candidate.writeBytes(VerseAudio.encodeWav(part))
+            repository.commitRecording(word.lemma, "audio/wav")
+        } catch (e: Exception) {
+            candidate.delete()
+        }
+    }
+
+    private fun plain(text: String) = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+        .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
+        .replace('ς', 'σ').lowercase(Locale.ROOT)
+
     private fun playExisting(position: Int) {
         val word = slots.getOrNull(position) ?: return
         stopPlayback()
-        player.play(listOf(repository.clipFile(word.word.surface)))
+        existingClip(word.word)?.let { player.play(listOf(it)) }
     }
 
     internal fun loadDemoTake(demoSamples: FloatArray) {
@@ -396,7 +418,7 @@ internal class VerseTakeEditor(
         waveform.isEnabled = ready
         waveform.visibility = if (recording) View.INVISIBLE else View.VISIBLE
         liveWaveform.visibility = if (recording) View.VISIBLE else View.GONE
-        val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
+        val existing = slots[index]?.let { existingClip(it.word) } != null
         next.isEnabled = ready
         keep.isEnabled = ready && existing
         nudgeBack.isEnabled = ready
@@ -404,16 +426,17 @@ internal class VerseTakeEditor(
         val edge = if (index < slots.lastIndex) "end" else "start"
         nudgeBack.contentDescription = "Move $edge boundary back 10 milliseconds"
         nudgeForward.contentDescription = "Move $edge boundary forward 10 milliseconds"
-        playTake.isEnabled = ready
+        playTake.isEnabled = !working && !recording
+        playSlice.isEnabled = !working && !recording
         playTake.setIconResource(if (playingTake && !pausedTake) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
-        playTake.contentDescription = if (playingTake && !pausedTake) "Pause verse take" else "Play verse take"
+        playTake.contentDescription = if (playingTake && !pausedTake) "Pause verse" else "Play verse"
         status.text = if (recording) "Recording…" else "${reviewed.size} / ${words.size} reviewed"
         val points = boundaries
         timing.text = if (points == null) "No recording" else {
             val first = points.start(index)
             val last = points.end(index)
-            val secondsFormat = DecimalFormat("0.#######", DecimalFormatSymbols(Locale.US))
-            val millisFormat = DecimalFormat("0.####", DecimalFormatSymbols(Locale.US))
+            val secondsFormat = DecimalFormat("0.###", DecimalFormatSymbols(Locale.US))
+            val millisFormat = DecimalFormat("0.###", DecimalFormatSymbols(Locale.US))
             "${secondsFormat.format(first.toDouble() / VerseAudio.SAMPLE_RATE)}s – " +
                 "${secondsFormat.format(last.toDouble() / VerseAudio.SAMPLE_RATE)}s " +
                 "(${millisFormat.format((last - first) * 1000.0 / VerseAudio.SAMPLE_RATE)} ms)"
@@ -574,7 +597,7 @@ internal class VerseTakeEditor(
             }
             holder.card.contentDescription = "$name, $role, card ${position + 1}"
             holder.label.text = word?.let { cardLabel(it) } ?: BLANK_LABEL
-            val hasExisting = word != null && repository.clipFile(word.word.surface).isFile
+            val hasExisting = word != null && existingClip(word.word) != null
             holder.playExisting.visibility = if (word != null) View.VISIBLE else View.GONE
             holder.playExisting.isEnabled = hasExisting && !working && !recording
             holder.playExisting.alpha = if (hasExisting) 1f else 0.4f
@@ -647,7 +670,7 @@ internal class VerseTakeEditor(
     private fun showSelection() {
         if (boundaries == null) return
         showWaveform()
-        val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
+        val existing = slots[index]?.let { existingClip(it.word) } != null
         keep.isEnabled = existing
     }
 
@@ -694,27 +717,55 @@ internal class VerseTakeEditor(
         } else {
             try {
                 stopPlayback()
-                preview?.delete()
-                val file = repository.newVersePreview()
-                preview = file
-                val points = checkNotNull(boundaries)
-                val first = points.start(1)
-                val last = points.end(slots.lastIndex - 1)
-                file.writeBytes(VerseAudio.encodeWav(samples.copyOfRange(first, last)))
-                playingTake = true
-                player.play(listOf(file)) {
-                    if (!closed) {
-                        playingTake = false
-                        pausedTake = false
-                        refresh()
+                val points = boundaries
+                val files = if (samples.isNotEmpty() && points != null) {
+                    preview?.delete()
+                    val file = repository.newVersePreview()
+                    preview = file
+                    file.writeBytes(VerseAudio.encodeWav(samples.copyOfRange(points.start(1), points.end(slots.lastIndex - 1))))
+                    listOf(file)
+                } else {
+                    // No live take yet: play whatever word recordings already exist, in verse order.
+                    slots.filterNotNull().map { repository.clipFile(it.word.surface) }.filter { it.isFile }
+                }
+                if (files.isEmpty()) {
+                    toast("There is no audio to play yet.")
+                } else {
+                    playingTake = true
+                    player.play(files) {
+                        if (!closed) {
+                            playingTake = false
+                            pausedTake = false
+                            refresh()
+                        }
                     }
                 }
             } catch (e: Exception) {
                 playingTake = false
-                toast(e.message ?: "Unable to play the verse take.")
+                toast(e.message ?: "Unable to play the verse.")
             }
         }
         refresh()
+    }
+
+    private fun playSelectedSlice() {
+        if (working || recording) return
+        try {
+            stopPlayback()
+            val points = boundaries
+            val file = if (samples.isNotEmpty() && points != null) {
+                preview?.delete()
+                repository.newVersePreview().also {
+                    preview = it
+                    it.writeBytes(VerseAudio.encodeWav(samples.copyOfRange(points.start(index), points.end(index))))
+                }
+            } else {
+                slots[index]?.let { repository.clipFile(it.word.surface) }?.takeIf { it.isFile }
+            }
+            if (file == null) toast("There is no audio for this card yet.") else player.play(listOf(file))
+        } catch (e: Exception) {
+            toast(e.message ?: "Unable to play this clip.")
+        }
     }
 
     private fun stopPlayback() {
@@ -727,8 +778,6 @@ internal class VerseTakeEditor(
         if (!rememberSelection()) return
         val points = boundaries ?: return
         val boundary = if (index < slots.lastIndex) index + 1 else index
-        val neighbour = if (boundary == index) index - 1 else index + 1
-        if (neighbour in reviewed) return
         val snapshot = points.snapshot()
         val target = (snapshot[boundary] + direction * VerseAudio.SAMPLE_RATE / 100)
             .coerceIn(snapshot[boundary - 1] + 1, snapshot[boundary + 1] - 1)
@@ -746,9 +795,7 @@ internal class VerseTakeEditor(
         val snapshot = points.snapshot()
         val finalStart = snapshot.lastIndex - 1
         if (boundary !in 1..finalStart) return
-        // Reviewed cards are locked: only the selected card's own handles move, and pushing stops at the next reviewed card.
-        val neighbour = if (index == boundary) boundary - 1 else boundary
-        if (neighbour != index && neighbour in reviewed) return
+        // Both handles of the selected card can always move; pushing stops at the next reviewed card, which stays locked.
         val lockedEnd = (boundary + 1 until finalStart).firstOrNull { it in reviewed } ?: finalStart
         val low = snapshot[boundary - 1] + 1
         val tail = (boundary until lockedEnd).map { if (slots[it] == null) SEPARATOR_WEIGHT else 1.0 }
@@ -848,6 +895,7 @@ internal class VerseTakeEditor(
                     candidate.writeBytes(VerseAudio.encodeWav(part))
                     written = true
                     repository.commitRecording(word.surface, "audio/wav")
+                    linkLemma(word, part)
                     activity.runOnUiThread {
                         if (!closed) {
                             working = false
@@ -1018,7 +1066,7 @@ internal class VerseTakeEditor(
         )
         chipStrokeColor = ColorStateList.valueOf(if (isActive) primary else if (spoken >= 0) VerseSliceWaveform.color(spoken) else onSurface)
         chipStrokeWidth = dp(if (isActive) 2 else 1).toFloat()
-        val recorded = word != null && repository.clipFile(word.word.lemma).isFile
+        val recorded = word != null && repository.clipFile(word.word.surface).isFile
         setTextColor(when {
             recorded -> androidx.core.content.ContextCompat.getColor(activity, R.color.workbench_recorded)
             isActive -> onPrimary
@@ -1075,6 +1123,19 @@ internal class VerseTakeEditor(
     private fun targetLabel(word: VerseRecordingWord) =
         word.word.gloss.ifBlank { word.word.mandarin.ifBlank { BLANK_LABEL } }
     private fun toast(message: String) = Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+    private fun iconButton(icon: Int, description: String) = MaterialButton(
+        activity, null, com.google.android.material.R.attr.materialIconButtonFilledTonalStyle
+    ).apply {
+        layoutParams = ViewGroup.MarginLayoutParams(dp(40), dp(40)).apply { marginEnd = dp(8) }
+        insetTop = 0
+        insetBottom = 0
+        iconSize = dp(24)
+        iconPadding = 0
+        setPadding(0, 0, 0, 0)
+        setIconResource(icon)
+        contentDescription = description
+    }
+
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
 }
 

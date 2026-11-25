@@ -606,7 +606,7 @@ class VerseSliceEditorTest {
                 assertEquals(1200, boundaries.start(2))
                 assertEquals(1600, boundaries.start(3))
                 move.invoke(editor, 3, 1700)
-                assertEquals(1600, boundaries.start(3))
+                assertEquals(1700, boundaries.start(3))
                 editor.dispose()
             }
         }

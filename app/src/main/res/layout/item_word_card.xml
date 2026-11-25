@@ -1,9 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+<com.google.android.material.button.MaterialButton
+    android:id="@+id/word_insert"
+    style="@style/Widget.Material3.Button.TextButton"
+    android:layout_width="32dp"
+    android:layout_height="64dp"
+    android:insetLeft="0dp"
+    android:insetRight="0dp"
+    android:minWidth="0dp"
+    android:padding="0dp"
+    android:lineSpacingMultiplier="0.8"
+    android:text="+\n·"
+    android:textSize="18sp"
+    android:contentDescription="Insert a separator before this card" />
+<com.google.android.material.card.MaterialCardView
+    android:id="@+id/word_card"
     android:layout_width="196dp"
     android:layout_height="wrap_content"
-    android:layout_marginEnd="8dp"
     android:clickable="true"
     android:focusable="true"
     app:cardBackgroundColor="?attr/colorSurface"
@@ -57,6 +75,21 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/word_position" />
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/word_play_existing"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:contentDescription="Play existing recording"
+            app:icon="@android:drawable/ic_media_play"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/word_metadata" />
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/word_play"
             style="@style/Widget.Material3.Button"
             android:layout_width="48dp"
@@ -68,7 +101,7 @@
             app:icon="@android:drawable/ic_media_play"
             app:iconGravity="textStart"
             app:iconPadding="0dp"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintStart_toEndOf="@id/word_play_existing"
             app:layout_constraintTop_toBottomOf="@id/word_metadata" />
         <com.google.android.material.button.MaterialButton
             android:id="@+id/word_assign"
@@ -86,3 +119,4 @@
             app:layout_constraintBottom_toBottomOf="@id/word_play" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>
+</LinearLayout>

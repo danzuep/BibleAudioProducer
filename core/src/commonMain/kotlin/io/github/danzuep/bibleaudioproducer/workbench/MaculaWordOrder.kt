@@ -39,11 +39,12 @@ internal object MaculaWordOrder {
         }
         fun isWord(node: SyntaxNode, test: (VerseWord) -> Boolean) =
             node is SyntaxWord && test(words[node.index])
-        fun visit(group: SyntaxGroup, incomplete: Boolean, subordinate: Boolean, inNominal: Boolean) {
-            val partial = incomplete || group.partial
+        fun visit(group: SyntaxGroup, subordinate: Boolean, inNominal: Boolean) {
+            // A group that runs into another verse stays put, but complete groups inside it are still ordered.
+            val partial = group.partial
             val sub = subordinate || group.rule.equals("sub-CL", ignoreCase = true)
             val nominal = inNominal || group.category == "np"
-            group.children.filterIsInstance<SyntaxGroup>().forEach { visit(it, partial, sub, nominal) }
+            group.children.filterIsInstance<SyntaxGroup>().forEach { visit(it, sub, nominal) }
             val all = members(group)
             if (partial || !contiguous(all)) return
             if (group.children.size == 2) {
@@ -53,7 +54,7 @@ internal object MaculaWordOrder {
                 if (particle != null && clause != null) {
                     val remaining = current(clause)
                     replace(all, listOf(particle.index) + remaining)
-                    visit(clause, partial, sub, nominal)
+                    visit(clause, sub, nominal)
                 }
             }
             val children = group.children.sortedBy { positions(members(it)).firstOrNull() ?: Int.MAX_VALUE }
@@ -180,7 +181,7 @@ internal object MaculaWordOrder {
             }
             sort(segment)
         }
-        visit(root, false, false, false)
+        visit(root, false, false)
         return result
     }
 }

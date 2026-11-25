@@ -576,7 +576,7 @@ class VerseSliceEditorTest {
                 assertEquals(4, slots.size)
                 select(2)
                 reviewed.addAll(listOf(1, 2))
-                root.findViewById<View>(R.id.clip_separator).performClick()
+                invoke("insertSeparator")
                 assertEquals(listOf(0, 400, 1600, 2200, 2800, 3200), boundaries.snapshot())
                 assertEquals(listOf(null, words[0], null, words[1], null), slots)
                 assertEquals(3, field("index").getInt(editor))

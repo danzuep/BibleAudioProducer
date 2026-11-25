@@ -124,9 +124,6 @@ internal class VerseTakeEditor(
         }
     }
     private lateinit var keep: Button
-    private lateinit var finish: Button
-    private lateinit var previewExisting: Button
-    private lateinit var separator: Button
 
     init {
         resetSlots()
@@ -180,7 +177,7 @@ internal class VerseTakeEditor(
             }
         }
         toolbar.menu.add("Finish verse").setOnMenuItemClickListener {
-            finish.performClick()
+            finishVerse()
             true
         }
         onDownload?.let { download ->
@@ -283,32 +280,30 @@ internal class VerseTakeEditor(
         next = content.findViewById<Button>(R.id.clip_next).apply { setOnClickListener { saveSelection() } }
         nudgeBack = content.findViewById<Button>(R.id.clip_nudge_back).apply { setOnClickListener { nudge(-1) } }
         nudgeForward = content.findViewById<Button>(R.id.clip_nudge_forward).apply { setOnClickListener { nudge(1) } }
-        previewExisting = content.findViewById<Button>(R.id.clip_preview_existing).apply {
-            setOnClickListener {
-                stopPlayback()
-                slots[index]?.let { player.play(listOf(repository.clipFile(it.word.surface))) }
-            }
-        }
-        separator = content.findViewById<Button>(R.id.clip_separator).apply { setOnClickListener { insertSeparator() } }
         keep = content.findViewById<Button>(R.id.clip_keep).apply {
             setOnClickListener {
                 val word = slots[index]?.word
                 if (word != null && repository.clipFile(word.surface).isFile && rememberSelection()) advance()
             }
         }
-        finish = content.findViewById<Button>(R.id.clip_finish).apply {
-            setOnClickListener {
-                if (rememberSelection() && allReviewed()) {
-                    discardConfirmed = true
-                    onComplete()
-                } else {
-                    refresh()
-                    toast("Review and save the changed clip before finishing.")
-                }
-            }
-        }
         refresh()
         return content
+    }
+
+    private fun finishVerse() {
+        if (samples.isNotEmpty() && boundaries != null && allReviewed()) {
+            discardConfirmed = true
+            onComplete()
+        } else {
+            refresh()
+            toast("Review and save the changed clip before finishing.")
+        }
+    }
+
+    private fun playExisting(position: Int) {
+        val word = slots.getOrNull(position) ?: return
+        stopPlayback()
+        player.play(listOf(repository.clipFile(word.word.surface)))
     }
 
     internal fun loadDemoTake(demoSamples: FloatArray) {
@@ -395,11 +390,8 @@ internal class VerseTakeEditor(
         liveWaveform.visibility = if (recording) View.VISIBLE else View.GONE
         val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
         next.isEnabled = ready
-        previewExisting.isEnabled = ready && existing
         keep.isEnabled = ready && existing
         keep.visibility = if (keep.isEnabled) View.VISIBLE else View.GONE
-        separator.isEnabled = ready && index > 0
-        finish.isEnabled = ready && allReviewed()
         nudgeBack.isEnabled = ready
         nudgeForward.isEnabled = nudgeBack.isEnabled
         val edge = if (index < slots.lastIndex) "end" else "start"
@@ -519,7 +511,9 @@ internal class VerseTakeEditor(
 
     private inner class WordAdapter : RecyclerView.Adapter<WordAdapter.Holder>() {
         inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
-            val card = view as MaterialCardView
+            val card = view.findViewById<MaterialCardView>(R.id.word_card)
+            val insert = view.findViewById<Button>(R.id.word_insert)
+            val playExisting = view.findViewById<Button>(R.id.word_play_existing)
             val label = view.findViewById<TextView>(R.id.word_label)
             val greek = view.findViewById<TextView>(R.id.word_greek)
             val position = view.findViewById<TextView>(R.id.word_position)
@@ -550,7 +544,20 @@ internal class VerseTakeEditor(
                 else -> "separator"
             }
             holder.card.contentDescription = "$name, $role, card ${position + 1}"
-            holder.label.text = name
+            holder.label.text = word?.let { cardLabel(it) } ?: BLANK_LABEL
+            val hasExisting = word != null && repository.clipFile(word.word.surface).isFile
+            holder.playExisting.visibility = if (hasExisting) View.VISIBLE else View.GONE
+            holder.playExisting.isEnabled = !working && !recording
+            holder.playExisting.setOnClickListener {
+                val current = holder.bindingAdapterPosition
+                if (current != RecyclerView.NO_POSITION) playExisting(current)
+            }
+            holder.insert.visibility = if (position == 0) View.GONE else View.VISIBLE
+            holder.insert.isEnabled = ready
+            holder.insert.setOnClickListener {
+                val current = holder.bindingAdapterPosition
+                if (current != RecyclerView.NO_POSITION && (current == index || selectCardForPreview(current))) insertSeparator()
+            }
             holder.greek.text = when {
                 word != null -> word.word.surface
                 position == 0 -> "Start"
@@ -607,7 +614,6 @@ internal class VerseTakeEditor(
         showWaveform()
         val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
         keep.isEnabled = existing
-        previewExisting.isEnabled = existing
     }
 
     private fun invalidateSlices(changed: Set<Int>) {
@@ -879,6 +885,12 @@ internal class VerseTakeEditor(
         else -> word.word.gloss
     }.ifBlank { BLANK_LABEL }
 
+    // The card title follows the script selection, with the Greek selection shown as transliteration.
+    private fun cardLabel(word: VerseRecordingWord): String {
+        val mode = if (guideMode == CUSTOM_GUIDE) lastGlossMode else guideMode
+        return guideLabel(word, if (mode == 2) 3 else mode)
+    }
+
     private fun guideWords() = scriptWords?.invoke() ?: words
 
     private fun beginCustomGuide() {
@@ -940,7 +952,12 @@ internal class VerseTakeEditor(
         )
         chipStrokeColor = ColorStateList.valueOf(if (isActive) primary else if (spoken >= 0) VerseSliceWaveform.color(spoken) else onSurface)
         chipStrokeWidth = dp(if (isActive) 2 else 1).toFloat()
-        setTextColor(if (isActive) onPrimary else onSurface)
+        val recorded = word != null && repository.clipFile(word.word.lemma).isFile
+        setTextColor(when {
+            isActive -> onPrimary
+            recorded -> androidx.core.content.ContextCompat.getColor(activity, R.color.workbench_recorded)
+            else -> onSurface
+        })
         if (word == null) {
             isClickable = false
             contentDescription = "$label, not linked to a card"

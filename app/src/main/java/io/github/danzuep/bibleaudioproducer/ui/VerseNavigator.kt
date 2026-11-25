@@ -28,6 +28,12 @@ internal class VerseNavigator(
     private val dialog = Dialog(activity, R.style.Theme_ClipEditor)
     private val leftPane = ScrollView(activity)
     private val rightPane = ScrollView(activity)
+    private val colon = TextView(activity).apply {
+        text = ":"
+        textSize = 24f
+        gravity = Gravity.CENTER
+        visibility = View.GONE
+    }
     private val bookList = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private var chapter: Int? = null
     private val chapterGrids = mutableMapOf<String, GridLayout>()
@@ -37,6 +43,7 @@ internal class VerseNavigator(
         val panes = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(leftPane, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            addView(colon, LinearLayout.LayoutParams(dp(16), ViewGroup.LayoutParams.MATCH_PARENT))
             addView(rightPane, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         }
         rightPane.visibility = View.GONE
@@ -89,6 +96,7 @@ internal class VerseNavigator(
         if (chapter == null) {
             leftPane.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
             rightPane.visibility = View.GONE
+            colon.visibility = View.GONE
         }
     }
 
@@ -97,7 +105,7 @@ internal class VerseNavigator(
         grid.removeAllViews()
         grid.columnCount = if (selected == null) 5 else 2
         versesOf(code).map { it.chapter }.distinct().sorted().forEach { number ->
-            grid.addView(numberButton("$number:", number == selected) { selectChapter(code, number) })
+            grid.addView(numberButton("$number", number == selected) { selectChapter(code, number) })
         }
     }
 
@@ -106,8 +114,9 @@ internal class VerseNavigator(
         chapterGrids.keys.filter { it != code }.forEach { chapterGrids.getValue(it).visibility = View.GONE }
         fillChapters(code, number)
         chapterGrids.getValue(code).visibility = View.VISIBLE
-        leftPane.layoutParams = LinearLayout.LayoutParams(dp(100), ViewGroup.LayoutParams.MATCH_PARENT)
+        leftPane.layoutParams = LinearLayout.LayoutParams(dp(96), ViewGroup.LayoutParams.MATCH_PARENT)
         rightPane.visibility = View.VISIBLE
+        colon.visibility = View.VISIBLE
         rightPane.removeAllViews()
         rightPane.addView(GridLayout(activity).apply {
             columnCount = 5

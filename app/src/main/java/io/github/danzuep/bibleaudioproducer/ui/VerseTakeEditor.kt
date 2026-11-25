@@ -946,7 +946,8 @@ internal class VerseTakeEditor(
         text = label
         isCheckable = false
         setEnsureMinTouchTargetSize(false)
-        chipMinHeight = dp(28).toFloat()
+        chipMinHeight = dp(32).toFloat()
+        layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32))
         textSize = 14f
         isSingleLine = true
         includeFontPadding = false

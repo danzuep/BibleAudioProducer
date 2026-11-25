@@ -208,7 +208,7 @@ class VerseSliceEditorTest {
             instrumentation.waitForIdleSync()
             scenario.onActivity {
                 val recycler = root.findViewById<RecyclerView>(R.id.clip_cards)
-                val card = checkNotNull(recycler.findViewHolderForAdapterPosition(1)).itemView
+                val card = checkNotNull(recycler.findViewHolderForAdapterPosition(1)).itemView.findViewById<View>(R.id.word_card)
                 val waveLocation = IntArray(2)
                 waveform.getLocationOnScreen(waveLocation)
                 val cardVisible = Rect()
@@ -252,7 +252,7 @@ class VerseSliceEditorTest {
             scenario.onActivity {
                 fun field(name: String) = VerseTakeEditor::class.java.getDeclaredField(name).apply { isAccessible = true }
                 val recycler = root.findViewById<RecyclerView>(R.id.clip_cards)
-                val card = checkNotNull(recycler.findViewHolderForAdapterPosition(2)).itemView
+                val card = checkNotNull(recycler.findViewHolderForAdapterPosition(2)).itemView.findViewById<View>(R.id.word_card)
                 val assign = card.findViewById<Button>(R.id.word_assign)
                 assertTrue(assign.isEnabled)
                 val move = VerseTakeEditor::class.java.getDeclaredMethod(

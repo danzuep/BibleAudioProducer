@@ -946,7 +946,11 @@ internal class VerseTakeEditor(
         text = label
         isCheckable = false
         setEnsureMinTouchTargetSize(false)
-        chipMinHeight = dp(28).toFloat()
+        chipMinHeight = dp(32).toFloat()
+        layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32))
+        textSize = 14f
+        isSingleLine = true
+        includeFontPadding = false
     }
 
     /** A word is linked to its card; the words a user types into a custom script are not. */

@@ -473,7 +473,7 @@ class VerseSliceEditorTest {
                     }
                     throw AssertionError("Expected $count reviewed clips")
                 }
-                waitForReviewed(1)
+                waitForReviewed(2)
                 assertArrayEquals(VerseAudio.encodeWav(VerseAudio.slice(samples, 800, 1500)), clip.readBytes())
                 waitForActivityFocus()
                 scenario.onActivity {

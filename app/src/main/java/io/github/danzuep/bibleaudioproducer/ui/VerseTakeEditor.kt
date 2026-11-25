@@ -424,7 +424,10 @@ internal class VerseTakeEditor(
 
     /** Re-reads state that changed outside the editor, such as clips recorded from the word details. */
     fun refreshExternal() {
-        if (::cards.isInitialized && !closed && !recording && !working) refresh()
+        if (::cards.isInitialized && !closed && !recording && !working) {
+            refresh()
+            deck.post { if (index in slots.indices) deck.scrollToPosition(index) }
+        }
     }
 
     private fun showWaveform() {
@@ -984,6 +987,7 @@ internal class VerseTakeEditor(
             if (working || recording) toast("Stop recording before opening word details.")
             else if (onWordDetails != null) {
                 stopPlayback()
+                if (spoken >= 0) selectCard(spoken)
                 refresh()
                 onWordDetails.invoke(word)
             }
@@ -991,6 +995,7 @@ internal class VerseTakeEditor(
         }
         setOnLongClickListener {
             if (working || recording) return@setOnLongClickListener false
+            if (spoken >= 0) selectCard(spoken)
             val drag = WordDrag(word.originalIndex)
             androidx.core.view.ViewCompat.startDragAndDrop(this, null, View.DragShadowBuilder(this), drag, 0)
         }

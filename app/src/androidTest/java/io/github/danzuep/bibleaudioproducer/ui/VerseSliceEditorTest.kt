@@ -577,7 +577,7 @@ class VerseSliceEditorTest {
                 select(2)
                 reviewed.addAll(listOf(1, 2))
                 invoke("insertSeparator")
-                assertEquals(listOf(0, 400, 1600, 2784, 2800, 3200), boundaries.snapshot())
+                assertEquals(listOf(0, 400, 1600, 2800, 3000, 3200), boundaries.snapshot())
                 assertEquals(listOf(null, words[0], null, words[1], null), slots)
                 assertEquals(3, field("index").getInt(editor))
                 assertEquals(setOf(1), reviewed)

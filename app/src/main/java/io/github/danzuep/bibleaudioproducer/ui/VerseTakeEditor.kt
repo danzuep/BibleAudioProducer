@@ -765,18 +765,20 @@ internal class VerseTakeEditor(
             toast("The first · card already covers the audio before the words.")
             return
         }
-        val start = points.start(index)
-        val end = points.end(index)
-        if (end - start < 2) {
-            toast("This clip is too short to add a separator before it.")
+        // The separator keeps this whole clip and every later word shifts one clip right,
+        // so the end trim is split to make room for the last word.
+        val last = points.count - 1
+        val trimStart = points.start(last)
+        val trimEnd = points.end(last)
+        if (trimEnd - trimStart < 2) {
+            toast("There is no room after the last word to shift the words right.")
             return
         }
-        // The separator takes the whole clip; the word keeps only a sliver to drag back out.
-        points.split(index, end - minOf(end - start - 1, VerseAudio.SAMPLE_RATE / 1000).coerceAtLeast(1))
+        points.split(last, trimStart + (trimEnd - trimStart) / 2)
         slots.add(index, null)
-        val shifted = reviewed.filter { it != index }.map { if (it >= index) it + 1 else it }
+        val kept = reviewed.filter { it < index }
         reviewed.clear()
-        reviewed.addAll(shifted)
+        reviewed.addAll(kept)
         index++
         refresh()
         scrollToSelection()
@@ -785,11 +787,11 @@ internal class VerseTakeEditor(
     private fun removeSeparator(position: Int) {
         val points = boundaries ?: return
         if (working || recording || slots.getOrNull(position) != null || position !in 1 until slots.lastIndex) return
-        points.merge(position + 1)
+        points.merge(points.count - 1)
         slots.removeAt(position)
-        val shifted = reviewed.filter { it != position + 1 }.map { if (it > position + 1) it - 1 else it }
+        val kept = reviewed.filter { it < position }
         reviewed.clear()
-        reviewed.addAll(shifted)
+        reviewed.addAll(kept)
         if (index > position) index--
         refresh()
     }

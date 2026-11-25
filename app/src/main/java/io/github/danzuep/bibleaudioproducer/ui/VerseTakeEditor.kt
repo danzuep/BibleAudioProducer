@@ -60,7 +60,8 @@ internal class VerseTakeEditor(
     private val isUnspoken: (VerseWord) -> Boolean = { false },
     private val onScriptReorder: ((List<Int>) -> Unit)? = null,
     private val onWordDetails: ((VerseRecordingWord) -> Unit)? = null,
-    private val onDownload: (() -> Unit)? = null
+    private val onDownload: (() -> Unit)? = null,
+    private val onReferenceClick: (() -> Unit)? = null
 ) {
     private val io = Executors.newSingleThreadExecutor()
     private val words = words.toMutableList()
@@ -134,6 +135,10 @@ internal class VerseTakeEditor(
         val content = LayoutInflater.from(context).inflate(R.layout.activity_clip_editor, null, false)
         val toolbar = content.findViewById<MaterialToolbar>(R.id.clip_toolbar)
         toolbar.title = reference
+        toolbar.post {
+            (0 until toolbar.childCount).map(toolbar::getChildAt).filterIsInstance<TextView>()
+                .firstOrNull { it.text.toString() == reference }?.setOnClickListener { onReferenceClick?.invoke() }
+        }
         toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
         toolbar.setNavigationContentDescription(R.string.audio_back)
         toolbar.setNavigationOnClickListener { onBack() }
@@ -215,6 +220,7 @@ internal class VerseTakeEditor(
                     }
                     guideMode = position
                     updateGuide()
+                    cards.notifyDataSetChanged()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
@@ -553,8 +559,13 @@ internal class VerseTakeEditor(
                 if (current != RecyclerView.NO_POSITION) playExisting(current)
             }
             holder.insert.visibility = if (position == 0) View.GONE else View.VISIBLE
-            holder.insert.isEnabled = ready
+            holder.insert.isEnabled = true
+            holder.insert.alpha = if (ready) 1f else 0.5f
             holder.insert.setOnClickListener {
+                if (!ready) {
+                    toast("Record the verse before inserting a separator.")
+                    return@setOnClickListener
+                }
                 val current = holder.bindingAdapterPosition
                 if (current != RecyclerView.NO_POSITION && (current == index || selectCardForPreview(current))) insertSeparator()
             }

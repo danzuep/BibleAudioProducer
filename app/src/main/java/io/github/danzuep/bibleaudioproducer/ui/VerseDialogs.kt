@@ -41,6 +41,8 @@ internal class VerseDialogs(
         val busy: Boolean
         val speechFailed: Boolean
         fun playVerse(verse: AudioVerse)
+        fun bookCodes(): List<String>
+        fun versesOf(book: String): List<AudioVerse>
         fun isPlayingVerse(verse: AudioVerse): Boolean
         fun playChapter(chapter: Int, verses: List<AudioVerse>)
         fun isPlayingChapter(chapter: Int): Boolean
@@ -346,7 +348,13 @@ internal class VerseDialogs(
                         }
                     }
                 }
-            }, { showVerseActions(verse) })
+            }, { showVerseActions(verse) }, {
+                VerseNavigator(activity, actions.bookCodes(), actions::versesOf) { target ->
+                    val depth = pages.size
+                    back()
+                    if (pages.size < depth) openVerse(target)
+                }.show(verse.reference)
+            })
         takeEditor = editor
         push(editor.view(), { editor.refreshExternal() }) {
             if (!editor.close()) return@push false

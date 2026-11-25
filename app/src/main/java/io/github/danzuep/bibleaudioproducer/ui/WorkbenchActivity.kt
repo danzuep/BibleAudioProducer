@@ -91,6 +91,8 @@ class WorkbenchActivity : AppCompatActivity() {
             override val busy get() = this@WorkbenchActivity.busy
             override val speechFailed get() = this@WorkbenchActivity.speechFailed
             override fun playVerse(verse: AudioVerse) = this@WorkbenchActivity.playVerse(verse)
+            override fun bookCodes() = RecordingPlan.books(cards)
+            override fun versesOf(book: String) = versesFor(book)
             override fun isPlayingVerse(verse: AudioVerse) = playingVerseReference == verse.reference
             override fun playChapter(chapter: Int, verses: List<AudioVerse>) =
                 this@WorkbenchActivity.playChapter(chapter, verses)

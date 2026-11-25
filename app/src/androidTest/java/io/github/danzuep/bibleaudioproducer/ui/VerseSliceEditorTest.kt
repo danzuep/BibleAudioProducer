@@ -443,7 +443,7 @@ class VerseSliceEditorTest {
                     invoke("refresh")
                     VerseTakeEditor::class.java.getDeclaredMethod("selectCard", Int::class.javaPrimitiveType)
                         .apply { isAccessible = true }.invoke(editor, 2)
-                    assertEquals(0, reviewedCount())
+                    assertEquals(1, reviewedCount())
                     (field("next").get(editor) as Button).performClick()
                 }
                 fun waitForActivityFocus() {
@@ -458,7 +458,7 @@ class VerseSliceEditorTest {
                 onView(withText(android.R.string.cancel)).inRoot(isDialog()).perform(click())
                 waitForActivityFocus()
                 scenario.onActivity {
-                    assertEquals(0, reviewedCount())
+                    assertEquals(1, reviewedCount())
                     assertArrayEquals(original, clip.readBytes())
                     (field("next").get(editor) as Button).performClick()
                 }

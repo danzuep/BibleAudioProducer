@@ -132,9 +132,8 @@ internal class VerseNavigator(
     }
 
     private fun numberButton(label: String, selected: Boolean, click: () -> Unit) = MaterialButton(
-        activity, null,
-        if (selected) com.google.android.material.R.attr.materialButtonStyle
-        else com.google.android.material.R.attr.materialButtonOutlinedStyle
+        android.view.ContextThemeWrapper(activity, R.style.Theme_ClipEditor), null,
+        com.google.android.material.R.attr.materialButtonOutlinedStyle
     ).apply {
         text = label
         textSize = 14f
@@ -145,6 +144,14 @@ internal class VerseNavigator(
         insetTop = 0
         insetBottom = 0
         setPadding(0, 0, 0, 0)
+        if (selected) {
+            val primary = com.google.android.material.color.MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary)
+            cornerRadius = dp(22)
+            strokeWidth = dp(3)
+            strokeColor = android.content.res.ColorStateList.valueOf(primary)
+            setTextColor(primary)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
         contentDescription = if (selected) "Chapter $label selected" else label
         layoutParams = GridLayout.LayoutParams().apply {
             width = dp(44); height = dp(44)

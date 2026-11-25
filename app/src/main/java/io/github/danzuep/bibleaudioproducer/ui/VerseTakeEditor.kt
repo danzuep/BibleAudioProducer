@@ -154,6 +154,14 @@ internal class VerseTakeEditor(
             contentDescription = "Play verse take"
             setOnClickListener { toggleTakePlayback() }
         }
+        toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
+            setIcon(android.R.drawable.ic_menu_info_details)
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            setOnMenuItemClickListener {
+                help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                true
+            }
+        }
         toolbar.menu.add("Play take").apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = playTake
@@ -172,14 +180,6 @@ internal class VerseTakeEditor(
         toolbar.menu.add("Record verse").apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = record
-        }
-        toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
-            setIcon(android.R.drawable.ic_menu_info_details)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener {
-                help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                true
-            }
         }
         toolbar.menu.add("Finish verse").setOnMenuItemClickListener {
             finishVerse()
@@ -540,6 +540,7 @@ internal class VerseTakeEditor(
             val ready = samples.isNotEmpty() && !working && !recording
             val name = word?.let { targetLabel(it) } ?: BLANK_LABEL
             val edge = position == 0 || position == slots.lastIndex
+            holder.card.layoutParams = holder.card.layoutParams.apply { width = dp(if (edge) 100 else 148) }
             holder.card.strokeWidth = dp(if (position == index) 3 else 1)
             holder.card.strokeColor = if (position == index)
                 MaterialColors.getColor(holder.card, com.google.android.material.R.attr.colorPrimary) else color
@@ -552,8 +553,8 @@ internal class VerseTakeEditor(
             holder.card.contentDescription = "$name, $role, card ${position + 1}"
             holder.label.text = word?.let { cardLabel(it) } ?: BLANK_LABEL
             val hasExisting = word != null && repository.clipFile(word.word.surface).isFile
-            holder.playExisting.visibility = if (hasExisting) View.VISIBLE else View.GONE
-            holder.playExisting.isEnabled = !working && !recording
+            holder.playExisting.visibility = if (word != null) View.VISIBLE else View.GONE
+            holder.playExisting.isEnabled = hasExisting && !working && !recording
             holder.playExisting.setOnClickListener {
                 val current = holder.bindingAdapterPosition
                 if (current != RecyclerView.NO_POSITION) playExisting(current)
@@ -947,10 +948,8 @@ internal class VerseTakeEditor(
         isCheckable = false
         setEnsureMinTouchTargetSize(false)
         chipMinHeight = dp(32).toFloat()
-        layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32))
         textSize = 14f
         isSingleLine = true
-        includeFontPadding = false
     }
 
     /** A word is linked to its card; the words a user types into a custom script are not. */

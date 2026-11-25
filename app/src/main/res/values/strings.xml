@@ -89,7 +89,7 @@
     <string name="audio_word_order_greek">Original order</string>
     <string name="audio_word_order_english">English (SVO)</string>
     <string name="audio_word_order_german">German (V2)</string>
-    <string name="audio_word_order_mandarin">Mandarin (S-Adv-V-O)</string>
+    <string name="audio_word_order_mandarin">Chinese (S-Adv-V-O)</string>
     <string name="audio_word_order_japanese">Japanese / Korean (SOV)</string>
     <string name="audio_word_order_arabic">Arabic / Hebrew (VSO)</string>
     <string name="audio_word_order_custom">Custom</string>

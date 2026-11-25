@@ -276,7 +276,7 @@ internal class VerseTakeEditor(
         keep = content.findViewById<Button>(R.id.clip_keep).apply {
             setOnClickListener {
                 val word = slots[index]?.word
-                if (word != null && repository.clipFile(word.surface).isFile && rememberSelection()) advance()
+                if (word != null && existingClip(word) != null && rememberSelection() && adoptExisting(word)) advance()
             }
         }
         refresh()
@@ -293,10 +293,28 @@ internal class VerseTakeEditor(
         }
     }
 
+    /** The surface form's recording, or failing that the lemma's, which can stand in for it. */
+    private fun existingClip(word: VerseWord): java.io.File? =
+        sequenceOf(word.surface, word.lemma).map(repository::clipFile).firstOrNull { it.isFile }
+
+    /** Copies a lemma recording to the surface form so it is used for this word; false if that fails. */
+    private fun adoptExisting(word: VerseWord): Boolean {
+        val surface = repository.clipFile(word.surface)
+        if (surface.isFile) return true
+        val lemma = repository.clipFile(word.lemma)
+        return try {
+            lemma.copyTo(surface)
+            true
+        } catch (e: java.io.IOException) {
+            toast("Unable to use the root word recording.")
+            false
+        }
+    }
+
     private fun playExisting(position: Int) {
         val word = slots.getOrNull(position) ?: return
         stopPlayback()
-        player.play(listOf(repository.clipFile(word.word.surface)))
+        existingClip(word.word)?.let { player.play(listOf(it)) }
     }
 
     internal fun loadDemoTake(demoSamples: FloatArray) {
@@ -383,7 +401,7 @@ internal class VerseTakeEditor(
         waveform.isEnabled = ready
         waveform.visibility = if (recording) View.INVISIBLE else View.VISIBLE
         liveWaveform.visibility = if (recording) View.VISIBLE else View.GONE
-        val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
+        val existing = slots[index]?.let { existingClip(it.word) } != null
         next.isEnabled = ready
         keep.isEnabled = ready && existing
         nudgeBack.isEnabled = ready
@@ -562,7 +580,7 @@ internal class VerseTakeEditor(
             }
             holder.card.contentDescription = "$name, $role, card ${position + 1}"
             holder.label.text = word?.let { cardLabel(it) } ?: BLANK_LABEL
-            val hasExisting = word != null && repository.clipFile(word.word.surface).isFile
+            val hasExisting = word != null && existingClip(word.word) != null
             holder.playExisting.visibility = if (word != null) View.VISIBLE else View.GONE
             holder.playExisting.isEnabled = hasExisting && !working && !recording
             holder.playExisting.alpha = if (hasExisting) 1f else 0.4f
@@ -635,7 +653,7 @@ internal class VerseTakeEditor(
     private fun showSelection() {
         if (boundaries == null) return
         showWaveform()
-        val existing = slots[index]?.let { repository.clipFile(it.word.surface).isFile } == true
+        val existing = slots[index]?.let { existingClip(it.word) } != null
         keep.isEnabled = existing
     }
 
@@ -1030,7 +1048,7 @@ internal class VerseTakeEditor(
         )
         chipStrokeColor = ColorStateList.valueOf(if (isActive) primary else if (spoken >= 0) VerseSliceWaveform.color(spoken) else onSurface)
         chipStrokeWidth = dp(if (isActive) 2 else 1).toFloat()
-        val recorded = word != null && (repository.clipFile(word.word.surface).isFile || repository.clipFile(word.word.lemma).isFile)
+        val recorded = word != null && repository.clipFile(word.word.surface).isFile
         setTextColor(when {
             recorded -> androidx.core.content.ContextCompat.getColor(activity, R.color.workbench_recorded)
             isActive -> onPrimary

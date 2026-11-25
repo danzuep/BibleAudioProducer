@@ -727,6 +727,8 @@ internal class VerseTakeEditor(
         if (!rememberSelection()) return
         val points = boundaries ?: return
         val boundary = if (index < slots.lastIndex) index + 1 else index
+        val neighbour = if (boundary == index) index - 1 else index + 1
+        if (neighbour in reviewed) return
         val snapshot = points.snapshot()
         val target = (snapshot[boundary] + direction * VerseAudio.SAMPLE_RATE / 100)
             .coerceIn(snapshot[boundary - 1] + 1, snapshot[boundary + 1] - 1)
@@ -744,17 +746,26 @@ internal class VerseTakeEditor(
         val snapshot = points.snapshot()
         val finalStart = snapshot.lastIndex - 1
         if (boundary !in 1..finalStart) return
+        // Reviewed cards are locked: only the selected card's own handles move, and pushing stops at the next reviewed card.
+        val neighbour = if (index == boundary) boundary - 1 else boundary
+        if (neighbour != index && neighbour in reviewed) return
+        val lockedEnd = (boundary + 1 until finalStart).firstOrNull { it in reviewed } ?: finalStart
         val low = snapshot[boundary - 1] + 1
-        val tail = (boundary until finalStart).map { if (slots[it] == null) SEPARATOR_WEIGHT else 1.0 }
+        val tail = (boundary until lockedEnd).map { if (slots[it] == null) SEPARATOR_WEIGHT else 1.0 }
         if (tail.isEmpty()) {
             invalidateSlices(points.move(boundary, sample.coerceIn(low, samples.size - 1)))
             return
         }
-        val minimum = ((samples.size - 1 - low) / (tail.size + 1)).coerceIn(1, MINIMUM_CLIP)
-        val high = samples.size - 1 - tail.size * minimum
+        val ceiling = if (lockedEnd == finalStart) samples.size - 1 else snapshot[lockedEnd]
+        val minimum = ((ceiling - low) / (tail.size + 1)).coerceIn(1, MINIMUM_CLIP)
+        val high = ceiling - tail.size * minimum
         if (high < low) return
         val target = sample.coerceIn(low, high)
-        val regionEnd = maxOf(snapshot[finalStart], target + tail.size * minimum).coerceAtMost(samples.size - 1)
+        val regionEnd = if (lockedEnd == finalStart) {
+            maxOf(snapshot[finalStart], target + tail.size * minimum).coerceAtMost(samples.size - 1)
+        } else {
+            ceiling
+        }
         invalidateSlices(points.replaceFrom(boundary, VerseAudio.splitRegion(samples, target, regionEnd, tail)))
     }
 
@@ -765,20 +776,35 @@ internal class VerseTakeEditor(
             toast("The first · card already covers the audio before the words.")
             return
         }
-        // The separator keeps this whole clip and every later word shifts one clip right,
-        // so the end trim is split to make room for the last word.
-        val last = points.count - 1
-        val trimStart = points.start(last)
-        val trimEnd = points.end(last)
-        if (trimEnd - trimStart < 2) {
-            toast("There is no room after the last word to shift the words right.")
-            return
+        if ((index + 1 until slots.lastIndex).any { it in reviewed }) {
+            // A later word is reviewed and locked, so it cannot shift: split this clip instead.
+            val start = points.start(index)
+            val end = points.end(index)
+            if (end - start < 2) {
+                toast("This clip is too short to add a separator before it.")
+                return
+            }
+            points.split(index, start + (end - start) / 2)
+            slots.add(index, null)
+            val shifted = reviewed.filter { it != index }.map { if (it >= index) it + 1 else it }
+            reviewed.clear()
+            reviewed.addAll(shifted)
+        } else {
+            // The separator keeps this whole clip and every later word shifts one clip right,
+            // so the end trim is split to make room for the last word.
+            val last = points.count - 1
+            val trimStart = points.start(last)
+            val trimEnd = points.end(last)
+            if (trimEnd - trimStart < 2) {
+                toast("There is no room after the last word to shift the words right.")
+                return
+            }
+            points.split(last, trimStart + (trimEnd - trimStart) / 2)
+            slots.add(index, null)
+            val kept = reviewed.filter { it < index }
+            reviewed.clear()
+            reviewed.addAll(kept)
         }
-        points.split(last, trimStart + (trimEnd - trimStart) / 2)
-        slots.add(index, null)
-        val kept = reviewed.filter { it < index }
-        reviewed.clear()
-        reviewed.addAll(kept)
         index++
         refresh()
         scrollToSelection()

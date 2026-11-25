@@ -518,7 +518,7 @@ class VerseSliceEditorTest {
                 invoke("refresh")
                 @Suppress("UNCHECKED_CAST")
                 val reviewed = field("reviewed").get(editor) as MutableSet<Int>
-                reviewed.addAll(listOf(1, 2, 3))
+                reviewed.addAll(listOf(1, 3))
                 root.findViewById<View>(R.id.clip_nudge_forward).performClick()
                 assertEquals(960, boundaries.end(1))
                 assertEquals(960, boundaries.start(2))
@@ -589,6 +589,24 @@ class VerseSliceEditorTest {
                 assertEquals(listOf(0, 400, 1600, 2800, 3200), boundaries.snapshot())
                 assertEquals(listOf(null, words[0], words[1], null), slots)
                 assertEquals(2, field("index").getInt(editor))
+                select(1)
+                reviewed.clear()
+                reviewed.add(2)
+                invoke("insertSeparator")
+                assertEquals(listOf(0, 400, 1000, 1600, 2800, 3200), boundaries.snapshot())
+                assertEquals(listOf(null, null, words[0], words[1], null), slots)
+                assertEquals(setOf(3), reviewed)
+                val move = VerseTakeEditor::class.java.getDeclaredMethod(
+                    "moveBoundary", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+                ).apply { isAccessible = true }
+                select(2)
+                reviewed.clear()
+                reviewed.add(3)
+                move.invoke(editor, 2, 1200)
+                assertEquals(1200, boundaries.start(2))
+                assertEquals(1600, boundaries.start(3))
+                move.invoke(editor, 3, 1700)
+                assertEquals(1600, boundaries.start(3))
                 editor.dispose()
             }
         }

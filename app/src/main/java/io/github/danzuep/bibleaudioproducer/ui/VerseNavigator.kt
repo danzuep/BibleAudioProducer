@@ -13,8 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import io.github.danzuep.bibleaudioproducer.workbench.AudioVerse
 
 /**
- * Book and chapter list on the left; once a chapter is chosen the left side narrows and the
- * verses of that chapter fill the right.
+ * Book and chapter list on the leftPane; once a chapter is chosen the leftPane side narrows and the
+ * verses of that chapter fill the rightPane.
  */
 internal class VerseNavigator(
     private val activity: AppCompatActivity,
@@ -23,21 +23,21 @@ internal class VerseNavigator(
     private val onPick: (AudioVerse) -> Unit
 ) {
     private val dialog: AlertDialog
-    private val left = ScrollView(activity)
-    private val right = ScrollView(activity)
+    private val leftPane = ScrollView(activity)
+    private val rightPane = ScrollView(activity)
     private val bookList = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private var book: String? = null
     private var chapter: Int? = null
     private val chapterGrids = mutableMapOf<String, GridLayout>()
 
     init {
-        left.addView(bookList)
+        leftPane.addView(bookList)
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(left, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-            addView(right, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            addView(leftPane, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            addView(rightPane, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         }
-        right.visibility = View.GONE
+        rightPane.visibility = View.GONE
         books.forEach(::addBook)
         dialog = AlertDialog.Builder(activity).setView(root)
             .setNegativeButton(android.R.string.cancel, null).create()
@@ -87,12 +87,12 @@ internal class VerseNavigator(
         if (chapterGrid.childCount == 0) expand(code)
         chapterGrids.values.forEach { it.columnCount = 2 }
         chapterGrid.visibility = View.VISIBLE
-        (left.layoutParams as LinearLayout.LayoutParams).apply { width = dp(120); weight = 0f }
-        left.requestLayout()
-        right.visibility = View.VISIBLE
+        (leftPane.layoutParams as LinearLayout.LayoutParams).apply { width = dp(120); weight = 0f }
+        leftPane.requestLayout()
+        rightPane.visibility = View.VISIBLE
         val verses = versesOf(code).filter { it.chapter == number }
-        right.removeAllViews()
-        right.addView(GridLayout(activity).apply {
+        rightPane.removeAllViews()
+        rightPane.addView(GridLayout(activity).apply {
             columnCount = 4
             verses.forEach { verse ->
                 addView(numberButton(verse.reference.substringAfter(':').substringBefore('!').toIntOrNull() ?: 0) {

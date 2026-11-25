@@ -13,8 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import io.github.danzuep.bibleaudioproducer.workbench.AudioVerse
 
 /**
- * Book and chapter list on the leftPane; once a chapter is chosen the leftPane side narrows and the
- * verses of that chapter fill the rightPane.
+ * Book and chapter list on the left; once a chapter is chosen the left side narrows and the
+ * verses of that chapter fill the right.
  */
 internal class VerseNavigator(
     private val activity: AppCompatActivity,

@@ -270,7 +270,7 @@ class MaculaXmlTest {
     @Test
     fun postpositiveOunMovesBeforeTheClauseLikeDeAndGar() {
         // JHN 6:67 BSB: "So Jesus asked the Twelve"
-        assertEquals("therefore Said Jesus", englishGlosses("""
+        assertEquals("therefore Jesus Said", englishGlosses("""
 <wg class="cl" rule="Conj-CL">
 <w ref="JHN 6:67!2" class="conj" lemma="οὖν" gloss="therefore">οὖν</w>
 <wg class="cl" rule="V-S">

@@ -385,7 +385,9 @@ internal class VerseTakeEditor(
         }
     }
 
-    private fun refresh(updateScript: Boolean = true) {
+    private var keepScript = false
+
+    private fun refresh() {
         val ready = samples.isNotEmpty() && !working && !recording
         (record as MaterialButton).setIconResource(if (recording) android.R.drawable.ic_media_pause else android.R.drawable.ic_btn_speak_now)
         record.contentDescription = if (recording) "Stop recording" else if (samples.isEmpty()) "Record verse" else "Record again"
@@ -417,7 +419,7 @@ internal class VerseTakeEditor(
                 "(${millisFormat.format((last - first) * 1000.0 / VerseAudio.SAMPLE_RATE)} ms)"
         }
         if (!reordering) cards.notifyDataSetChanged()
-        if (updateScript) updateGuide()
+        if (!keepScript) updateGuide()
         showWaveform()
     }
 
@@ -462,7 +464,8 @@ internal class VerseTakeEditor(
         markExistingReviewed()
         index = next
         showSelection()
-        refresh(updateScript = false)
+        keepScript = true
+        try { refresh() } finally { keepScript = false }
         scrollToSelection()
     }
 

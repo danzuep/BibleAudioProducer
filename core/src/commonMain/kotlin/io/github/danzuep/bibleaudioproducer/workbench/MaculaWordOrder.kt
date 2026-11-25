@@ -133,7 +133,12 @@ internal object MaculaWordOrder {
                     mode == WordOrderMode.ENGLISH_SVO && it.nodes.size == 1 &&
                         category(it.nodes.single()) == "pp" && it.slot in setOf("O", "ADV")
                 }
-                val sorted = parts.filter { it !== leading }.sortedBy {
+                val remaining = parts.filter { it !== leading }
+                // "In the beginning was the Word": a fronted phrase before "to be" and its subject stays inverted.
+                if (leading != null && remaining.map { it.slot } == listOf("V", "S") &&
+                    remaining[0].nodes.singleOrNull()?.let { it is SyntaxWord && words[it.index].lemma == "εἰμί" } == true
+                ) return
+                val sorted = remaining.sortedBy {
                     if (it.slot == "CONJ") -1
                     else if (mode.verbSecond && sub && it.slot == "V") slots.size
                     else slots.indexOf(it.slot).let { rank -> if (rank < 0) slots.size else rank }

@@ -30,7 +30,7 @@ class MaculaXmlTest {
         assertEquals("λέγω", word.lemma)
         assertEquals("verb", word.pos)
         assertEquals("v", word.role)
-        assertEquals("say", word.gloss)
+        assertEquals("says", word.gloss)
         assertEquals("says", word.sourceGloss)
         assertEquals("说", word.mandarin)
         assertEquals("V", word.morphology)
@@ -205,5 +205,61 @@ class MaculaXmlTest {
             VerseWorkflow.modeOrder(verse, WordOrderMode.JAPANESE_SOV))
         assertEquals(listOf(1, 0, 2, 3),
             VerseWorkflow.modeOrder(verse, WordOrderMode.MANDARIN_SADVVO))
+    }
+
+    @Test
+    fun john1v1EnglishOrderFollowsTheBsbAndKeepsTheSourceGloss() {
+        val verse = MaculaXml.parse("""
+<book><sentence>
+<wg rule="Conj3CL" class="cl">
+<wg class="cl" rule="P-VC-S">
+<wg rule="PrepNp" class="pp" role="p">
+<w ref="JHN 1:1!1" class="prep" lemma="ἐν" english="in" mandarin="" gloss="In [the]">Ἐν</w>
+<w ref="JHN 1:1!2" class="noun" lemma="ἀρχή" english="beginning" mandarin="太初" gloss="beginning">ἀρχῇ</w>
+</wg>
+<w role="vc" ref="JHN 1:1!3" class="verb" lemma="εἰμί" english="was" mandarin="有" gloss="was">ἦν</w>
+<wg class="np" rule="DetNP" role="s">
+<w ref="JHN 1:1!4" class="det" lemma="ὁ" english="the" mandarin="" gloss="the">ὁ</w>
+<w ref="JHN 1:1!5" class="noun" lemma="λόγος" english="word" mandarin="道" gloss="Word">λόγος</w>
+</wg>
+</wg>
+<wg type="group">
+<w ref="JHN 1:1!6" class="conj" lemma="καί" english="and" mandarin="而且" gloss="and">καὶ</w>
+<wg class="cl" rule="S-VC-P">
+<wg class="np" rule="DetNP" role="s">
+<w ref="JHN 1:1!7" class="det" lemma="ὁ" english="the" mandarin="" gloss="the">ὁ</w>
+<w ref="JHN 1:1!8" class="noun" lemma="λόγος" english="word" mandarin="道" gloss="Word">λόγος</w>
+</wg>
+<w role="vc" ref="JHN 1:1!9" class="verb" lemma="εἰμί" english="was" mandarin="在" gloss="was">ἦν</w>
+<wg rule="PrepNp" class="pp" role="p">
+<w ref="JHN 1:1!10" class="prep" lemma="πρός" english="with" mandarin="与~同" gloss="with">πρὸς</w>
+<wg class="np" rule="DetNP">
+<w ref="JHN 1:1!11" class="det" lemma="ὁ" english="" mandarin="" gloss="-">τὸν</w>
+<w ref="JHN 1:1!12" class="noun" lemma="θεός" english="God" mandarin="神" gloss="God">θεόν</w>
+</wg>
+</wg>
+</wg>
+</wg>
+<wg type="group">
+<w ref="JHN 1:1!13" class="conj" lemma="καί" english="and" mandarin="而且" gloss="and">καὶ</w>
+<wg class="cl" rule="P-VC-S">
+<w role="p" ref="JHN 1:1!14" class="noun" lemma="θεός" english="God" mandarin="神" gloss="God">θεὸς</w>
+<w role="vc" ref="JHN 1:1!15" class="verb" lemma="εἰμί" english="was" mandarin="是" gloss="was">ἦν</w>
+<wg class="np" rule="DetNP" role="s">
+<w ref="JHN 1:1!16" class="det" lemma="ὁ" english="the" mandarin="" gloss="the">ὁ</w>
+<w ref="JHN 1:1!17" class="noun" lemma="λόγος" english="word" mandarin="道" gloss="Word">λόγος</w>
+</wg>
+</wg>
+</wg>
+</wg>
+</sentence></book>
+        """.trimIndent()).single()
+        assertEquals("In [the]", verse.words[0].gloss)
+        assertEquals("", verse.words[10].gloss)
+        val english = VerseWorkflow.reorder(verse, WordOrderMode.ENGLISH_SVO).map { it.gloss }.filter { it.isNotEmpty() }
+        assertEquals(
+            "In [the] beginning was the Word and the Word was with God and the Word was God",
+            english.joinToString(" ")
+        )
     }
 }

@@ -66,16 +66,18 @@ object MaculaXml {
                             val role = attrs["role"].orEmpty().ifEmpty {
                                 stack.asReversed().firstOrNull { it.role.isNotEmpty() }?.role.orEmpty()
                             }
+                            val sourceGloss = attrs["gloss"].orEmpty()
                             val word = VerseWord(
                                 surface = attrs["text"] ?: text.toString().trim(),
                                 lemma = attrs["lemma"].orEmpty(),
                                 pos = attrs["class"].orEmpty(), type = attrs["type"].orEmpty(),
                                 grammaticalCase = attrs["case"].orEmpty(), mood = attrs["mood"].orEmpty(),
-                                gloss = attrs["english"] ?: attrs["gloss"].orEmpty(), role = role,
+                                gloss = sourceGloss.takeIf { it.isNotBlank() && it != "-" } ?: attrs["english"].orEmpty(),
+                                role = role,
                                 mandarin = attrs["chinese"] ?: attrs["mandarin"].orEmpty(),
                                 morphology = attrs["morph"].orEmpty(), reference = ref,
                                 id = attrs["id"].orEmpty(), head = attrs["head"] == "true",
-                                sourceGloss = attrs["gloss"].orEmpty()
+                                sourceGloss = sourceGloss
                             )
                             allWords.getOrPut(ref.substringBefore('!')) { mutableListOf() }.add(word)
                             stack.last().children.add(RawWord(word))

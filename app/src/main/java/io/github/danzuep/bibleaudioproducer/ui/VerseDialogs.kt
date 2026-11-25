@@ -428,6 +428,7 @@ internal class VerseDialogs(
                 text = "${activity.getString(label)}: ${value.ifBlank { "—" }}"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setPadding(0, dp(6), 0, dp(6))
+                setTextIsSelectable(true)
             })
         }
         val scroll = ScrollView(activity).apply {

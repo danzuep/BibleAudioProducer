@@ -695,9 +695,7 @@ class WorkbenchLaunchTest {
             var ready = false
             while (!ready && System.currentTimeMillis() < deadline) {
                 scenario.onActivity { activity ->
-                    val views = ArrayList<View>()
-                    activity.window.decorView.findViewsWithText(views, "Next", View.FIND_VIEWS_WITH_TEXT)
-                    ready = views.any { it is Button && it.isEnabled }
+                    ready = activity.findViewById<Button>(R.id.clip_next).isEnabled
                 }
                 if (!ready) Thread.sleep(50)
             }

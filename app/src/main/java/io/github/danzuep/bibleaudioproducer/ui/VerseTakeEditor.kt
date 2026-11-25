@@ -947,6 +947,9 @@ internal class VerseTakeEditor(
         isCheckable = false
         setEnsureMinTouchTargetSize(false)
         chipMinHeight = dp(28).toFloat()
+        textSize = 14f
+        isSingleLine = true
+        includeFontPadding = false
     }
 
     /** A word is linked to its card; the words a user types into a custom script are not. */

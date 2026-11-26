@@ -10,6 +10,9 @@
     <string name="audio_project_create_failed">Unable to create the project.</string>
     <string name="audio_project_load_failed">Unable to load this project.</string>
     <string name="audio_word_details">Word details</string>
+    <string name="audio_trim_hint">Drag the handles to trim the start and end of this recording.</string>
+    <string name="audio_trim_save">Save trimmed clip</string>
+    <string name="audio_trim_failed">Unable to save the trimmed clip.</string>
     <string name="audio_word_record">Record word</string>
     <string name="audio_word_play">Play word</string>
     <string name="audio_word_field_surface">Greek form</string>

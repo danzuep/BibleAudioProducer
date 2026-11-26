@@ -19,7 +19,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import io.github.danzuep.bibleaudioproducer.R
+import io.github.danzuep.bibleaudioproducer.audio.AndroidAudioDecoder
 import io.github.danzuep.bibleaudioproducer.audio.GreekTransliterator
+import io.github.danzuep.bibleaudioproducer.audio.VerseAudio
 import io.github.danzuep.bibleaudioproducer.data.AudioProjectRepository
 import io.github.danzuep.bibleaudioproducer.workbench.AudioProjectState
 import io.github.danzuep.bibleaudioproducer.workbench.AudioVerse
@@ -62,12 +64,14 @@ internal class VerseDialogs(
         )
     }
 
+    private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val refreshers = mutableListOf<() -> Unit>()
     private var takeEditor: VerseTakeEditor? = null
 
     fun stopForBackground() = takeEditor?.stopForBackground()
 
     fun dispose() {
+        io.shutdown()
         takeEditor?.dispose()
         takeEditor = null
     }
@@ -415,6 +419,23 @@ internal class VerseDialogs(
             setOnClickListener { actions.speakGreek(word.surface) }
         })
 
+        var closed = false
+        val trimPanel = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(trimPanel)
+        fun loadTrimEditor() {
+            val file = repository.clipFile(word.surface)
+            if (!file.isFile) return
+            io.execute {
+                val decoded = try { AndroidAudioDecoder().decode(file) } catch (e: Exception) { null }
+                activity.runOnUiThread {
+                    if (closed || decoded == null || decoded.size < 3 * MINIMUM_TRIM) return@runOnUiThread
+                    trimPanel.removeAllViews()
+                    trimPanel.addView(trimEditor(word, decoded) { loadTrimEditor() })
+                }
+            }
+        }
+        loadTrimEditor()
+
         val content = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(8), dp(4), 0)
@@ -466,8 +487,60 @@ internal class VerseDialogs(
             )
         }
         push(root, refresh) {
+            closed = true
             actions.stopPlayback()
             true
+        }
+    }
+
+    // Boundaries are [0, start, end, size]; the muted outer segments are trimmed away on save.
+    private fun trimEditor(word: VerseWord, samples: FloatArray, onSaved: () -> Unit): View {
+        val points = mutableListOf(0, 0, samples.size, samples.size)
+        val waveform = VerseSliceWaveform(activity).apply {
+            muted = setOf(0, 2)
+            onBoundary = { index, sample ->
+                points[index] = if (index == 1) sample.coerceIn(0, points[2] - MINIMUM_TRIM)
+                else sample.coerceIn(points[1] + MINIMUM_TRIM, samples.size)
+                show(samples, points, 1)
+            }
+            show(samples, points, 1)
+        }
+        val save = MaterialButton(activity).apply {
+            setText(R.string.audio_trim_save)
+            setOnClickListener {
+                isEnabled = false
+                val trimmed = samples.copyOfRange(points[1], points[2])
+                io.execute {
+                    val error = try {
+                        val candidate = repository.recordingCandidateFile(word.surface)
+                        candidate.parentFile?.mkdirs()
+                        candidate.writeBytes(VerseAudio.encodeWav(trimmed))
+                        repository.commitRecording(word.surface, "audio/wav")
+                        null
+                    } catch (e: Exception) {
+                        e.message ?: activity.getString(R.string.audio_trim_failed)
+                    }
+                    activity.runOnUiThread {
+                        if (error != null) {
+                            isEnabled = true
+                            android.widget.Toast.makeText(activity, error, android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            actions.stopPlayback()
+                            onSaved()
+                            refreshControls()
+                        }
+                    }
+                }
+            }
+        }
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(waveform, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(120)))
+            addView(TextView(activity).apply {
+                setText(R.string.audio_trim_hint)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            })
+            addView(save)
         }
     }
 
@@ -582,3 +655,5 @@ private class VerseFlowLayout(
 
     override fun checkLayoutParams(params: LayoutParams): Boolean = params is MarginLayoutParams
 }
+
+private const val MINIMUM_TRIM = VerseAudio.SAMPLE_RATE / 100

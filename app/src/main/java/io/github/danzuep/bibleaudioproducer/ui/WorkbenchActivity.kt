@@ -102,9 +102,6 @@ class WorkbenchActivity : AppCompatActivity() {
                 reference: String, order: List<Int>?, unspoken: Set<String>,
                 selectedPreset: WordOrderMode?
             ) = this@WorkbenchActivity.saveVerseState(reference, order, unspoken, selectedPreset = selectedPreset)
-            override fun recordWord(word: VerseWord) {
-                if (!busy && hasRecordingPermission()) startRecording(word.surface, word)
-            }
             override fun isPlaying(card: RecordingCard) = playingLemma == card.lemma
             override fun playRecording(card: RecordingCard) = this@WorkbenchActivity.playRecording(card)
             override fun speakGreek(text: String) = this@WorkbenchActivity.speakGreek(text)
@@ -1295,7 +1292,7 @@ class WorkbenchActivity : AppCompatActivity() {
         }
     }
 
-    private fun startRecording(lemma: String, word: VerseWord? = null) {
+    private fun startRecording(lemma: String) {
         if (pendingTake() != null) {
             reviewPendingTake()
             return
@@ -1318,7 +1315,6 @@ class WorkbenchActivity : AppCompatActivity() {
             activeLemma = lemma
             adapter.clearWaveform()
             updateRows()
-            if (word != null) showTakeReview(lemma, word)
             waveformHandler.post(waveformSampler)
         } catch (exception: Exception) {
             Toast.makeText(this, R.string.audio_workbench_recording_failed, Toast.LENGTH_LONG).show()
@@ -1379,7 +1375,7 @@ class WorkbenchActivity : AppCompatActivity() {
         showTakeReview(lemma)
     }
 
-    private fun showTakeReview(lemma: String, word: VerseWord? = null) {
+    private fun showTakeReview(lemma: String) {
         val candidate = repository.recordingCandidateFile(lemma)
         val current = repository.clipFile(lemma)
         val root = LinearLayout(this).apply {
@@ -1396,9 +1392,6 @@ class WorkbenchActivity : AppCompatActivity() {
         }
         addWordLabel(GreekTransliterator.transliterate(lemma), 12f)
         addWordLabel(lemma, 26f)
-        if (word != null) {
-            addWordLabel(listOf(word.gloss, word.mandarin).filter(String::isNotBlank).joinToString(" · "), 14f)
-        }
         root.addView(TextView(this).apply {
             setText(R.string.audio_review_select_hint)
             textSize = 14f
@@ -1414,7 +1407,7 @@ class WorkbenchActivity : AppCompatActivity() {
                 else cancelRecord(RecordingCard("", lemma, "", 0))
             }
             if (pendingTake() == lemma) {
-                if (finishReview(lemma, useNew, advanceCard = word == null)) dialog.dismiss()
+                if (finishReview(lemma, useNew, advanceCard = true)) dialog.dismiss()
             } else if (!useNew) dialog.dismiss()
         }
         fun addTake(file: File, label: Int, isNew: Boolean): Pair<RecordingWaveform, Button> {

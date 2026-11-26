@@ -159,14 +159,16 @@ internal class VerseTakeEditor(
             setOnClickListener { toggleTakePlayback(saved = false) }
         }
         if (!compact) {
+            val toggleHelp = {
+                help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            }
             val info = roundButton("Info", android.R.drawable.ic_menu_info_details).apply {
-                setOnClickListener {
-                    help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                }
+                setOnClickListener { toggleHelp() }
             }
             toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
                 setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
                 actionView = info
+                setOnMenuItemClickListener { toggleHelp(); true }
             }
         }
         toolbar.menu.add("Play saved").apply {

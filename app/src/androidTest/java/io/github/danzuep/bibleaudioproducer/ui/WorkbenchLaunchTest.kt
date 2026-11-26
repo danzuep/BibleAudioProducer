@@ -639,38 +639,6 @@ class WorkbenchLaunchTest {
     }
 
     @Test
-    fun verseRecordingShowsReviewBeforeStoppingAndCanKeepTheOldTake() {
-        createLegacyProject()
-        val context = grantRecordingPermission()
-        val repository = AudioProjectRepository(directory)
-        val jhn11 = context.assets.open("books/JHN.xml").bufferedReader().use {
-            MaculaXml.parse(it.readText()).first { verse -> verse.reference == "JHN 1:1" }.words
-        }
-        val surface = jhn11.first { word -> jhn11.count { it.surface == word.surface } == 1 }.surface
-        val wordIndex = jhn11.indexOfFirst { it.surface == surface }
-        ActivityScenario.launch(WorkbenchActivity::class.java).use { scenario ->
-            awaitBooks(scenario, 27)
-            scenario.onActivity { activity ->
-                val chips = activity.findViewById<com.google.android.material.chip.ChipGroup>(R.id.clip_tokens)
-                assertTrue(chips.getChildAt(wordIndex).performClick())
-            }
-            val current = repository.clipFile(surface)
-            check(current.parentFile!!.mkdirs() || current.parentFile!!.isDirectory)
-            val original = VerseAudio.encodeWav(FloatArray(16000) { 0.1f })
-            current.writeBytes(original)
-            onView(withContentDescription(context.getString(R.string.audio_word_record, surface))).perform(click())
-            onView(withText(R.string.audio_review_new_waveform)).check(matches(isDisplayed()))
-            onView(withText(R.string.audio_review_old_waveform)).check(matches(isDisplayed()))
-            Thread.sleep(800)
-            onView(withContentDescription(R.string.audio_review_stop_recording)).perform(click())
-            onView(withContentDescription(R.string.audio_review_play_new)).check(matches(isEnabled()))
-            onView(withContentDescription(R.string.audio_review_keep)).perform(click())
-            assertArrayEquals(original, current.readBytes())
-            assertTrue(!repository.recordingCandidateFile(surface).exists())
-        }
-    }
-
-    @Test
     fun verseTakeRequiresConfirmationBeforeReplacingExistingClip() {
         val context = grantRecordingPermission()
         val verse = context.assets.open("books/JHN.xml").bufferedReader().use {

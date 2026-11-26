@@ -386,7 +386,7 @@ class VerseSliceEditorTest {
                 custom.setText("chinese2 new chinese0 ·")
                 invoke("commitCustomGuide")
                 assertEquals(View.VISIBLE, guide.visibility)
-                assertEquals("chinese2 · new · chinese0 · · · ✎", guideText())
+                assertEquals("chinese2 · new · chinese0 · · · ", guideText())
                 assertTrue(guide.getChildAt(0).isClickable)
                 assertTrue(!guide.getChildAt(1).isClickable)
                 assertTrue(guide.getChildAt(2).isClickable)

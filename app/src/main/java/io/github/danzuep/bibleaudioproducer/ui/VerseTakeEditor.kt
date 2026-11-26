@@ -1026,13 +1026,7 @@ internal class VerseTakeEditor(
         tokens.removeAllViews()
         val entries = if (custom) customTokens else guideWords().map { guideLabel(it, guideMode) to it }
         entries.forEach { (label, word) -> tokens.addView(guideChip(label, word)) }
-        if (custom) tokens.addView(smallChip("").apply {
-            chipIcon = androidx.core.content.ContextCompat.getDrawable(activity, android.R.drawable.ic_menu_edit)
-            isChipIconVisible = true
-            chipStartPadding = dp(2).toFloat()
-            textStartPadding = 0f
-            textEndPadding = 0f
-            chipIconTint = ColorStateList.valueOf(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface))
+        if (custom) tokens.addView(smallChip("✎").apply {
             contentDescription = "Edit custom script"
             isClickable = true
             setOnClickListener {

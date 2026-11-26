@@ -100,9 +100,10 @@ internal class VerseTakeEditor(
     private var customOriginal = emptyList<Pair<String, VerseRecordingWord?>>()
     private lateinit var status: TextView
     private lateinit var timing: TextView
-    private lateinit var playSlice: MaterialButton
     private lateinit var help: View
     private lateinit var playTake: MaterialButton
+    private lateinit var playSaved: MaterialButton
+    private var playingSaved = false
     private lateinit var nudgeBack: Button
     private lateinit var nudgeForward: Button
     private var playingTake = false
@@ -144,8 +145,18 @@ internal class VerseTakeEditor(
         toolbar.setNavigationContentDescription(R.string.audio_back)
         toolbar.setNavigationOnClickListener { onBack() }
         help = content.findViewById(R.id.clip_help)
-        playTake = iconButton(android.R.drawable.ic_media_play, "Play verse").apply {
-            setOnClickListener { toggleTakePlayback() }
+        playSaved = roundButton("Play saved verse recording").apply {
+            text = "(▶)"
+            textSize = 14f
+            isAllCaps = false
+            setOnClickListener { toggleTakePlayback(saved = true) }
+        }
+        playTake = roundButton("Play verse", android.R.drawable.ic_media_play).apply {
+            setOnClickListener { toggleTakePlayback(saved = false) }
+        }
+        toolbar.menu.add("Play saved").apply {
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            actionView = playSaved
         }
         toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
             setIcon(android.R.drawable.ic_menu_info_details)
@@ -159,7 +170,7 @@ internal class VerseTakeEditor(
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = playTake
         }
-        record = iconButton(android.R.drawable.ic_btn_speak_now, "Record verse").apply {
+        record = roundButton("Record verse", android.R.drawable.ic_btn_speak_now).apply {
             id = R.id.clip_record
             setOnClickListener { toggleRecord() }
         }
@@ -248,7 +259,6 @@ internal class VerseTakeEditor(
         content.findViewById<View>(R.id.clip_zoom_out).setOnClickListener { waveform.zoomOut() }
         status = content.findViewById(R.id.clip_progress)
         timing = content.findViewById(R.id.clip_timing)
-        playSlice = content.findViewById<MaterialButton>(R.id.clip_play_slice).apply { setOnClickListener { playSelectedSlice() } }
         deck = content.findViewById(R.id.clip_cards)
         cards = WordAdapter()
         deck.layoutManager = LinearLayoutManager(context, RecyclerView.HORIZONTAL, false)
@@ -426,10 +436,16 @@ internal class VerseTakeEditor(
         val edge = if (index < slots.lastIndex) "end" else "start"
         nudgeBack.contentDescription = "Move $edge boundary back 10 milliseconds"
         nudgeForward.contentDescription = "Move $edge boundary forward 10 milliseconds"
-        playTake.isEnabled = !working && !recording
-        playSlice.isEnabled = !working && !recording
-        playTake.setIconResource(if (playingTake && !pausedTake) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
-        playTake.contentDescription = if (playingTake && !pausedTake) "Pause verse" else "Play verse"
+        val playingNew = playingTake && !playingSaved
+        val playingOld = playingTake && playingSaved
+        playTake.setIconResource(if (playingNew && !pausedTake) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+        playTake.contentDescription = if (playingNew && !pausedTake) "Pause verse" else "Play verse"
+        playTake.isEnabled = !working && !recording && !playingOld
+        playSaved.text = if (playingOld && !pausedTake) "(⏸)" else "(▶)"
+        playSaved.contentDescription = if (playingOld && !pausedTake) "Pause saved verse recording" else "Play saved verse recording"
+        val hasSaved = savedFiles().isNotEmpty()
+        playSaved.isEnabled = !working && !recording && !playingNew && (hasSaved || playingOld)
+        playSaved.alpha = if (playSaved.isEnabled) 1f else 0.4f
         status.text = if (recording) "Recording…" else "${reviewed.size} / ${words.size} reviewed"
         val points = boundaries
         timing.text = if (points == null) "No recording" else {
@@ -707,7 +723,9 @@ internal class VerseTakeEditor(
         }
     }
 
-    private fun toggleTakePlayback() {
+    private fun savedFiles() = slots.filterNotNull().map { repository.clipFile(it.word.surface) }.filter { it.isFile }
+
+    private fun toggleTakePlayback(saved: Boolean) {
         if (playingTake) {
             if (pausedTake) {
                 if (player.resume()) pausedTake = false
@@ -718,20 +736,18 @@ internal class VerseTakeEditor(
             try {
                 stopPlayback()
                 val points = boundaries
-                val files = if (samples.isNotEmpty() && points != null) {
+                val files = if (saved) savedFiles() else if (samples.isNotEmpty() && points != null) {
                     preview?.delete()
                     val file = repository.newVersePreview()
                     preview = file
                     file.writeBytes(VerseAudio.encodeWav(samples.copyOfRange(points.start(1), points.end(slots.lastIndex - 1))))
                     listOf(file)
-                } else {
-                    // No live take yet: play whatever word recordings already exist, in verse order.
-                    slots.filterNotNull().map { repository.clipFile(it.word.surface) }.filter { it.isFile }
-                }
+                } else emptyList()
                 if (files.isEmpty()) {
-                    toast("There is no audio to play yet.")
+                    toast(if (saved) "There is no saved audio to play yet." else "There is no new audio to play yet.")
                 } else {
                     playingTake = true
+                    playingSaved = saved
                     player.play(files) {
                         if (!closed) {
                             playingTake = false
@@ -746,26 +762,6 @@ internal class VerseTakeEditor(
             }
         }
         refresh()
-    }
-
-    private fun playSelectedSlice() {
-        if (working || recording) return
-        try {
-            stopPlayback()
-            val points = boundaries
-            val file = if (samples.isNotEmpty() && points != null) {
-                preview?.delete()
-                repository.newVersePreview().also {
-                    preview = it
-                    it.writeBytes(VerseAudio.encodeWav(samples.copyOfRange(points.start(index), points.end(index))))
-                }
-            } else {
-                slots[index]?.let { repository.clipFile(it.word.surface) }?.takeIf { it.isFile }
-            }
-            if (file == null) toast("There is no audio for this card yet.") else player.play(listOf(file))
-        } catch (e: Exception) {
-            toast(e.message ?: "Unable to play this clip.")
-        }
     }
 
     private fun stopPlayback() {
@@ -1068,8 +1064,8 @@ internal class VerseTakeEditor(
         chipStrokeWidth = dp(if (isActive) 2 else 1).toFloat()
         val recorded = word != null && repository.clipFile(word.word.surface).isFile
         setTextColor(when {
+            isActive -> if (recorded) androidx.core.content.ContextCompat.getColor(activity, R.color.workbench_recorded_light) else onPrimary
             recorded -> androidx.core.content.ContextCompat.getColor(activity, R.color.workbench_recorded)
-            isActive -> onPrimary
             else -> onSurface
         })
         if (word == null) {
@@ -1123,16 +1119,21 @@ internal class VerseTakeEditor(
     private fun targetLabel(word: VerseRecordingWord) =
         word.word.gloss.ifBlank { word.word.mandarin.ifBlank { BLANK_LABEL } }
     private fun toast(message: String) = Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
-    private fun iconButton(icon: Int, description: String) = MaterialButton(
-        activity, null, com.google.android.material.R.attr.materialIconButtonFilledTonalStyle
+    private fun roundButton(description: String, icon: Int? = null) = MaterialButton(
+        activity, null, com.google.android.material.R.attr.materialButtonStyle
     ).apply {
         layoutParams = ViewGroup.MarginLayoutParams(dp(40), dp(40)).apply { marginEnd = dp(8) }
+        minWidth = 0
+        minimumWidth = 0
         insetTop = 0
         insetBottom = 0
-        iconSize = dp(24)
-        iconPadding = 0
         setPadding(0, 0, 0, 0)
-        setIconResource(icon)
+        if (icon != null) {
+            iconSize = dp(24)
+            iconPadding = 0
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setIconResource(icon)
+        }
         contentDescription = description
     }
 

@@ -8,4 +8,5 @@
     <color name="workbench_unspoken">#737B87</color>
     <color name="workbench_record">#C62632</color>
     <color name="workbench_recorded">#167D3D</color>
+    <color name="workbench_recorded_light">#9BE8B0</color>
 </resources>

@@ -61,7 +61,10 @@ internal class VerseTakeEditor(
     private val onScriptReorder: ((List<Int>) -> Unit)? = null,
     private val onWordDetails: ((VerseRecordingWord) -> Unit)? = null,
     private val onDownload: (() -> Unit)? = null,
-    private val onReferenceClick: (() -> Unit)? = null
+    private val onReferenceClick: (() -> Unit)? = null,
+    /** Edits a single word's clip: no script, cards or verse actions, and [details] is shown below the waveform. */
+    private val compact: Boolean = false,
+    private val details: View? = null
 ) {
     private val io = Executors.newSingleThreadExecutor()
     private val words = words.toMutableList()
@@ -84,6 +87,7 @@ internal class VerseTakeEditor(
     private var working = false
     private var closed = false
     private var discardConfirmed = false
+    private var existingLoaded = false
     private var index = 0
     private lateinit var record: Button
     private lateinit var deck: RecyclerView
@@ -154,17 +158,22 @@ internal class VerseTakeEditor(
         playTake = roundButton("Play verse", android.R.drawable.ic_media_play).apply {
             setOnClickListener { toggleTakePlayback(saved = false) }
         }
+        if (!compact) {
+            val toggleHelp = {
+                help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            }
+            val info = roundButton("Info", android.R.drawable.ic_menu_info_details).apply {
+                setOnClickListener { toggleHelp() }
+            }
+            toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
+                setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+                actionView = info
+                setOnMenuItemClickListener { toggleHelp(); true }
+            }
+        }
         toolbar.menu.add("Play saved").apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = playSaved
-        }
-        toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
-            setIcon(android.R.drawable.ic_menu_info_details)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener {
-                help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                true
-            }
         }
         toolbar.menu.add("Play take").apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
@@ -178,7 +187,7 @@ internal class VerseTakeEditor(
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = record
         }
-        toolbar.menu.add("Finish verse").setOnMenuItemClickListener {
+        if (!compact) toolbar.menu.add("Finish verse").setOnMenuItemClickListener {
             finishVerse()
             true
         }
@@ -289,8 +298,36 @@ internal class VerseTakeEditor(
                 if (word != null && existingClip(word) != null && rememberSelection() && adoptExisting(word)) advance()
             }
         }
+        if (compact) {
+            listOf(R.id.clip_guide_row, R.id.clip_tokens, R.id.clip_custom_row, R.id.clip_cards,
+                R.id.clip_progress_row, R.id.clip_keep).forEach { content.findViewById<View>(it).visibility = View.GONE }
+            details?.let { content.findViewById<ViewGroup>(R.id.clip_content).addView(it) }
+            loadExistingClip()
+        }
         refresh()
         return content
+    }
+
+    /** Opens the word's saved clip as the take, so its start and end can be trimmed without re-recording. */
+    private fun loadExistingClip() {
+        val file = slots.firstNotNullOfOrNull { it?.let { word -> repository.clipFile(word.word.surface) } }
+            ?.takeIf { it.isFile } ?: return
+        working = true
+        io.execute {
+            val decoded = try { AndroidAudioDecoder().decode(file) } catch (e: Exception) { null }
+            activity.runOnUiThread {
+                if (closed) return@runOnUiThread
+                working = false
+                if (decoded != null && decoded.isNotEmpty() && !recording && samples.isEmpty()) {
+                    samples = decoded
+                    boundaries = VerseBoundaries(VerseAudio.suggestBoundaries(decoded, words.size))
+                    existingLoaded = true
+                    resetSlots()
+                    showSelection()
+                }
+                refresh()
+            }
+        }
     }
 
     private fun finishVerse() {
@@ -357,7 +394,7 @@ internal class VerseTakeEditor(
         if (working) return
         if (!recording) {
             if (!hasPermission()) return
-            if (samples.isNotEmpty()) {
+            if (samples.isNotEmpty() && !existingLoaded) {
                 AlertDialog.Builder(activity).setMessage("Discard this verse take and record again?")
                     .setNegativeButton(android.R.string.cancel, null)
                     .setPositiveButton(android.R.string.ok) { _, _ -> beginRecording() }.show()
@@ -398,6 +435,7 @@ internal class VerseTakeEditor(
     private fun beginRecording() {
         try {
             stopPlayback()
+            existingLoaded = false
             draft?.delete()
             val file = repository.newVerseDraft()
             draft = file
@@ -895,7 +933,10 @@ internal class VerseTakeEditor(
                     activity.runOnUiThread {
                         if (!closed) {
                             working = false
-                            advance()
+                            if (compact) {
+                                discardConfirmed = true
+                                onComplete()
+                            } else advance()
                         }
                     }
                 } catch (e: Exception) {
@@ -927,7 +968,7 @@ internal class VerseTakeEditor(
 
     fun close(): Boolean {
         if (working) return false
-        if (!discardConfirmed && (recording || samples.isNotEmpty())) {
+        if (!discardConfirmed && (recording || samples.isNotEmpty() && !existingLoaded)) {
             AlertDialog.Builder(activity)
                 .setMessage("Discard the verse take? Saved clips will be kept.")
                 .setNegativeButton(android.R.string.cancel, null)
@@ -1026,7 +1067,13 @@ internal class VerseTakeEditor(
         tokens.removeAllViews()
         val entries = if (custom) customTokens else guideWords().map { guideLabel(it, guideMode) to it }
         entries.forEach { (label, word) -> tokens.addView(guideChip(label, word)) }
-        if (custom) tokens.addView(smallChip("✎").apply {
+        if (custom) tokens.addView(smallChip("").apply {
+            chipIcon = androidx.core.content.ContextCompat.getDrawable(context, android.R.drawable.ic_menu_edit)
+            isChipIconVisible = true
+            chipIconTint = ColorStateList.valueOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface))
+            textStartPadding = 0f
+            textEndPadding = 0f
             contentDescription = "Edit custom script"
             isClickable = true
             setOnClickListener {

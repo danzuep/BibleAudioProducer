@@ -10,9 +10,6 @@
     <string name="audio_project_create_failed">Unable to create the project.</string>
     <string name="audio_project_load_failed">Unable to load this project.</string>
     <string name="audio_word_details">Word details</string>
-    <string name="audio_trim_hint">Drag the handles to trim the start and end of this recording.</string>
-    <string name="audio_trim_save">Save trimmed clip</string>
-    <string name="audio_trim_failed">Unable to save the trimmed clip.</string>
     <string name="audio_word_record">Record word</string>
     <string name="audio_word_play">Play word</string>
     <string name="audio_word_field_surface">Greek form</string>
@@ -41,7 +38,7 @@
     <string name="audio_archive_imported">Imported %1$d recordings; %2$d skipped.</string>
     <string name="audio_archive_import_failed">Unable to import the audio archive.</string>
     <string name="audio_settings_description">Project tools and data management</string>
-    <string name="audio_speak_greek">Speak Greek</string>
+    <string name="audio_speak_greek">Modern Greek TTS</string>
     <string name="audio_tts_voice_choose">Choose installed Android TTS voice</string>
     <string name="audio_tts_voice_title">Android speech voice</string>
     <string name="audio_tts_voice_unavailable">No Greek Android TTS voices are installed.</string>

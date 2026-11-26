@@ -19,9 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import io.github.danzuep.bibleaudioproducer.R
-import io.github.danzuep.bibleaudioproducer.audio.AndroidAudioDecoder
 import io.github.danzuep.bibleaudioproducer.audio.GreekTransliterator
-import io.github.danzuep.bibleaudioproducer.audio.VerseAudio
 import io.github.danzuep.bibleaudioproducer.data.AudioProjectRepository
 import io.github.danzuep.bibleaudioproducer.workbench.AudioProjectState
 import io.github.danzuep.bibleaudioproducer.workbench.AudioVerse
@@ -53,7 +51,6 @@ internal class VerseDialogs(
             reference: String, order: List<Int>?, unspoken: Set<String>,
             selectedPreset: WordOrderMode? = null
         )
-        fun recordWord(word: VerseWord)
         fun isPlaying(card: RecordingCard): Boolean
         fun playRecording(card: RecordingCard)
         fun speakGreek(text: String)
@@ -64,14 +61,18 @@ internal class VerseDialogs(
         )
     }
 
-    private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val refreshers = mutableListOf<() -> Unit>()
     private var takeEditor: VerseTakeEditor? = null
+    private var wordEditor: VerseTakeEditor? = null
 
-    fun stopForBackground() = takeEditor?.stopForBackground()
+    fun stopForBackground() {
+        takeEditor?.stopForBackground()
+        wordEditor?.stopForBackground()
+    }
 
     fun dispose() {
-        io.shutdown()
+        wordEditor?.dispose()
+        wordEditor = null
         takeEditor?.dispose()
         takeEditor = null
     }
@@ -335,7 +336,7 @@ internal class VerseDialogs(
                 takeEditor?.syncWords(VerseWorkflow.recordingWords(verse.words, order, unspoken))
             },
             { entry ->
-                showWordDetails(entry.word, entry.word.disabled(unspoken)) { disabled ->
+                showWordDetails(entry, entry.word.disabled(unspoken)) { disabled ->
                     if (takeEditor?.canChangeSpoken() != true) {
                         android.widget.Toast.makeText(activity, "Discard the take before changing spoken words.", android.widget.Toast.LENGTH_LONG).show()
                     } else {
@@ -369,77 +370,26 @@ internal class VerseDialogs(
         }
     }
 
-    private fun showWordDetails(word: VerseWord, disabled: Boolean, onToggleDisabled: (Boolean) -> Unit) {
-        val card = RecordingCard("", word.surface, word.gloss, 0)
-        val root = LinearLayout(activity).apply {
+    private fun showWordDetails(entry: VerseRecordingWord, disabled: Boolean, onToggleDisabled: (Boolean) -> Unit) {
+        val word = entry.word
+        val info = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(12), dp(12), dp(16))
+            setPadding(0, dp(8), 0, 0)
         }
-        val header = LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            orientation = LinearLayout.HORIZONTAL
-        }
-        val greek = greekLabel(word, 28f).apply {
+        info.addView(wordStack(word, greekLabel(word, 28f).apply {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
-        }
-        val record = roundButton(if (repository.clipFile(word.surface).isFile) {
-            R.color.workbench_muted
-        } else {
-            R.color.workbench_record
-        }).apply {
-            setOnClickListener { actions.recordWord(word) }
-        }
-        val play = roundButton(R.color.workbench_primary).apply {
-            setOnClickListener {
-                if (repository.clipFile(word.surface).isFile) actions.playRecording(card)
-                else actions.speakGreek(word.surface)
-            }
-        }
-        val close = Button(activity).apply {
-            text = "←"
-            contentDescription = activity.getString(R.string.audio_back)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
-        }
-        header.addView(close, LinearLayout.LayoutParams(dp(48), dp(56)))
-        header.addView(wordStack(word, greek), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(record)
-        header.addView(play, LinearLayout.LayoutParams(dp(56), dp(56)).apply {
-            leftMargin = dp(4)
-        })
-        root.addView(header)
-        root.addView(MaterialButton(activity).apply {
+        }))
+        info.addView(MaterialButton(activity).apply {
             setText(if (disabled) R.string.audio_word_restore else R.string.audio_word_disable)
             setOnClickListener {
                 onToggleDisabled(!disabled)
                 back()
             }
         })
-        root.addView(MaterialButton(activity).apply {
+        info.addView(MaterialButton(activity).apply {
             setText(R.string.audio_speak_greek)
             setOnClickListener { actions.speakGreek(word.surface) }
         })
-
-        var closed = false
-        val trimPanel = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(trimPanel)
-        fun loadTrimEditor() {
-            val file = repository.clipFile(word.surface)
-            if (!file.isFile) return
-            io.execute {
-                val decoded = try { AndroidAudioDecoder().decode(file) } catch (e: Exception) { null }
-                activity.runOnUiThread {
-                    if (closed || decoded == null || decoded.size < 3 * MINIMUM_TRIM) return@runOnUiThread
-                    trimPanel.removeAllViews()
-                    trimPanel.addView(trimEditor(word, decoded) { loadTrimEditor() })
-                }
-            }
-        }
-        loadTrimEditor()
-
-        val content = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(8), dp(4), 0)
-        }
         listOf(
             R.string.audio_word_field_reference to word.reference,
             R.string.audio_word_field_surface to word.surface,
@@ -453,94 +403,24 @@ internal class VerseDialogs(
             R.string.audio_word_field_mandarin to word.mandarin,
             R.string.audio_word_field_morphology to word.morphology
         ).forEach { (label, value) ->
-            content.addView(TextView(activity).apply {
+            info.addView(TextView(activity).apply {
                 text = "${activity.getString(label)}: ${value.ifBlank { "—" }}"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 setPadding(0, dp(6), 0, dp(6))
                 setTextIsSelectable(true)
             })
         }
-        val scroll = ScrollView(activity).apply {
-            isVerticalScrollBarEnabled = true
-            isScrollbarFadingEnabled = false
-            addView(content)
-        }
-        root.addView(scroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
-        close.setOnClickListener { back() }
-        val refresh = {
-            val recorded = repository.clipFile(word.surface).isFile
-            record.backgroundTintList = ColorStateList.valueOf(
-                ContextCompat.getColor(
-                    activity,
-                    if (recorded) R.color.workbench_muted else R.color.workbench_record
-                )
-            )
-            record.setText(R.string.audio_record_symbol)
-            record.contentDescription = activity.getString(R.string.audio_word_record, word.surface)
-            play.isEnabled = recorded || actions.isPlaying(card) || !actions.speechFailed
-            play.alpha = if (play.isEnabled) 1f else 0.4f
-            play.setText(if (actions.isPlaying(card)) R.string.audio_stop_symbol else R.string.audio_play_symbol)
-            play.contentDescription = activity.getString(
-                if (actions.isPlaying(card)) R.string.audio_stop_word else R.string.audio_word_play, word.surface
-            )
-        }
-        push(root, refresh) {
-            closed = true
-            actions.stopPlayback()
+        actions.stopPlayback()
+        val editor = VerseTakeEditor(
+            activity, repository, listOf(entry), actions::hasRecordingPermission,
+            onReorder = {}, onBack = { back() }, onComplete = { back() },
+            reference = word.surface, compact = true, details = info
+        )
+        wordEditor = editor
+        push(editor.view(), { editor.refreshExternal() }) {
+            if (!editor.close()) return@push false
+            wordEditor = null
             true
-        }
-    }
-
-    // Boundaries are [0, start, end, size]; the muted outer segments are trimmed away on save.
-    private fun trimEditor(word: VerseWord, samples: FloatArray, onSaved: () -> Unit): View {
-        val points = mutableListOf(0, 0, samples.size, samples.size)
-        val waveform = VerseSliceWaveform(activity).apply {
-            muted = setOf(0, 2)
-            onBoundary = { index, sample ->
-                points[index] = if (index == 1) sample.coerceIn(0, points[2] - MINIMUM_TRIM)
-                else sample.coerceIn(points[1] + MINIMUM_TRIM, samples.size)
-                show(samples, points, 1)
-            }
-            show(samples, points, 1)
-        }
-        val save = MaterialButton(activity).apply {
-            setText(R.string.audio_trim_save)
-            setOnClickListener {
-                isEnabled = false
-                val trimmed = samples.copyOfRange(points[1], points[2])
-                io.execute {
-                    val error = try {
-                        val candidate = repository.recordingCandidateFile(word.surface)
-                        candidate.parentFile?.mkdirs()
-                        candidate.writeBytes(VerseAudio.encodeWav(trimmed))
-                        repository.commitRecording(word.surface, "audio/wav")
-                        null
-                    } catch (e: Exception) {
-                        e.message ?: activity.getString(R.string.audio_trim_failed)
-                    }
-                    activity.runOnUiThread {
-                        if (error != null) {
-                            isEnabled = true
-                            android.widget.Toast.makeText(activity, error, android.widget.Toast.LENGTH_LONG).show()
-                        } else {
-                            actions.stopPlayback()
-                            onSaved()
-                            refreshControls()
-                        }
-                    }
-                }
-            }
-        }
-        return LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(waveform, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(120)))
-            addView(TextView(activity).apply {
-                setText(R.string.audio_trim_hint)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            })
-            addView(save)
         }
     }
 
@@ -655,5 +535,3 @@ private class VerseFlowLayout(
 
     override fun checkLayoutParams(params: LayoutParams): Boolean = params is MarginLayoutParams
 }
-
-private const val MINIMUM_TRIM = VerseAudio.SAMPLE_RATE / 100

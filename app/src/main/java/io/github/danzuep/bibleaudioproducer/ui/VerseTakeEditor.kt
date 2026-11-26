@@ -158,17 +158,20 @@ internal class VerseTakeEditor(
         playTake = roundButton("Play verse", android.R.drawable.ic_media_play).apply {
             setOnClickListener { toggleTakePlayback(saved = false) }
         }
+        if (!compact) {
+            val info = roundButton("Info", android.R.drawable.ic_menu_info_details).apply {
+                setOnClickListener {
+                    help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                }
+            }
+            toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
+                setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+                actionView = info
+            }
+        }
         toolbar.menu.add("Play saved").apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             actionView = playSaved
-        }
-        if (!compact) toolbar.menu.add(0, R.id.clip_help_action, 0, "Info").apply {
-            setIcon(android.R.drawable.ic_menu_info_details)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener {
-                help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                true
-            }
         }
         toolbar.menu.add("Play take").apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
@@ -1062,7 +1065,13 @@ internal class VerseTakeEditor(
         tokens.removeAllViews()
         val entries = if (custom) customTokens else guideWords().map { guideLabel(it, guideMode) to it }
         entries.forEach { (label, word) -> tokens.addView(guideChip(label, word)) }
-        if (custom) tokens.addView(smallChip("✎").apply {
+        if (custom) tokens.addView(smallChip("").apply {
+            chipIcon = androidx.core.content.ContextCompat.getDrawable(context, android.R.drawable.ic_menu_edit)
+            isChipIconVisible = true
+            chipIconTint = ColorStateList.valueOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface))
+            textStartPadding = 0f
+            textEndPadding = 0f
             contentDescription = "Edit custom script"
             isClickable = true
             setOnClickListener {
